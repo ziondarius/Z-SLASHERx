@@ -526,4 +526,3 @@ class UI:
         img = UI.load_image_cached(p, scale=scale)
         display.blit(img, (x - img.get_width() / 2, y - img.get_height() / 2))
         UI.draw_img_outline(display, img, x - img.get_width() / 2, y - img.get_height() / 2)
-

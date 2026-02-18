@@ -24,4 +24,3 @@ def get_version_label() -> str:
         return "v-dev"
     dirty = _run_git(["status", "--porcelain"])
     return f"v-{short}-dirty" if dirty else f"v-{short}"
-

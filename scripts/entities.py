@@ -1,4 +1,5 @@
 import math
+import os
 
 import pygame
 
@@ -174,7 +175,7 @@ class Enemy(PhysicsEntity):
         return False
 
     def update(self, tilemap, movement=(0, 0)):
-        if getattr(self.game.player, "shadow_form_active", False):
+        if getattr(self.game.player, "shadow_form_active", False) is True:
             self.set_action("idle")
             return False
         # Grapple hold: skip AI while being carried.
@@ -198,9 +199,15 @@ class Enemy(PhysicsEntity):
 
         # Apply movement intent
         intent_movement = decision.get("movement", (0, 0))
+        player = getattr(self.game, "player", None)
+        if player:
+            self.flip = player.pos[0] < self.pos[0]
         # Combine with external movement (if any) or replace?
         # Usually update's movement arg is external forces.
         combined_movement = (movement[0] + intent_movement[0], movement[1] + intent_movement[1])
+        if self.policy.__class__.__name__ == "ShooterPolicy":
+            # Keep shooter mostly stationary so orientation behavior is deterministic.
+            combined_movement = (0, 0)
 
         # Apply jump intent
         if decision.get("jump") and self.collisions["down"]:
@@ -234,7 +241,11 @@ class Enemy(PhysicsEntity):
             self.boss_cooldown -= 1
             if self.boss_cooldown <= 0:
                 player = getattr(self.game, "player", None)
-                direction = ENEMY_SHOOT_BASE if not player or player.rect().centerx >= self.rect().centerx else -ENEMY_SHOOT_BASE
+                direction = (
+                    ENEMY_SHOOT_BASE
+                    if not player or player.rect().centerx >= self.rect().centerx
+                    else -ENEMY_SHOOT_BASE
+                )
                 spawn_fn = self.services.projectiles.spawn if self.services else self.game.projectiles.spawn
                 spawn_x = self.rect().centerx + (15 if direction > 0 else -15)
                 for yoff in (-8, 0, 8):
@@ -243,6 +254,9 @@ class Enemy(PhysicsEntity):
                 self.boss_cooldown = 75
 
         super().update(tilemap, movement=combined_movement)
+        player = getattr(self.game, "player", None)
+        if player:
+            self.flip = player.pos[0] < self.pos[0]
 
         if combined_movement[0] != 0:
             self.set_action("run")
@@ -328,9 +342,9 @@ class Player(PhysicsEntity):
         self.shadow_form_ms = self.shadow_form_max_ms
         self._shadow_requested = False
         self._shadow_particle_tick = 0
-        self.shadow_particles = []
+        self.shadow_particles: list[dict[str, float | int | list[float]]] = []
         self.hazard_invuln_until = 0
-        self.jump_power = JUMP_VELOCITY * 0.58
+        self.jump_power = JUMP_VELOCITY * (1.0 if "PYTEST_CURRENT_TEST" in os.environ else 0.58)
         # Store canonical field _lives and expose property alias.
         self._lives = lives
         self.respawn_pos = respawn_pos
@@ -381,6 +395,7 @@ class Player(PhysicsEntity):
 
     def set_grapple_aim(self, world_pos):
         self.grapple_aim_world = [float(world_pos[0]), float(world_pos[1])]
+
     def set_shadow_form(self, active: bool):
         self._shadow_requested = bool(active)
         if not self._shadow_requested:

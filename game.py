@@ -2,7 +2,6 @@
 
 
 import pygame
-import math
 
 from scripts.asset_manager import AssetManager
 from scripts.audio_service import AudioService

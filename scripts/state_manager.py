@@ -794,10 +794,10 @@ class StoreState(State):
         self._ui = UI
         self.settings = settings
         self.cm = CollectableManager(None)
-        self.options_raw = list(self.cm.ITEMS.keys())
+        self.options_raw = [name for name in self.cm.ITEMS.keys() if name == "Gun"]
         # Build formatted options with aligned prices
         max_len = max(len(o) for o in self.options_raw)
-        self.options = [f"{o.ljust(max_len)}  ${self.cm.ITEMS[o]:<6}" for o in self.options_raw]
+        self.options = [f"{o.ljust(max_len)}  ${self.cm.get_price(o):<6}" for o in self.options_raw]
         self.widget = ScrollableListWidget(self.options, visible_rows=5, spacing=50, font_size=30)
         am = AssetManager.get()
         default_preview = am.get_image("entities/player/default/idle/00.png")
@@ -829,7 +829,7 @@ class StoreState(State):
             name = self.options_raw[self.widget.selected_index]
             result = self.cm.buy_collectable(name)
             if result == "success":
-                self.message = self.loc.translate("store.buy_success", name, self.cm.ITEMS[name])
+                self.message = self.loc.translate("store.buy_success", name, self.cm.get_price(name))
             elif result == "not enough coins":
                 self.message = self.loc.translate("store.not_enough")
             elif result == "not purchaseable":

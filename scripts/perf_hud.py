@@ -157,7 +157,7 @@ class PerformanceHUD:
             import resource
             import sys
 
-            usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss  # type: ignore[attr-defined]
             if sys.platform == "darwin":
                 mem = usage / (1024 * 1024)  # MB
             else:

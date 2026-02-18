@@ -1,0 +1,259 @@
+"""Performance HUD metrics collection.
+
+This module isolates *timing* concerns (work segment, full frame, smoothed
+average) from the visual rendering of the overlay. Rendering of the text/UI
+remains delegated to `UI.render_perf_overlay` so we do not further bloat the
+already large `ui.py` with stateful timing logic.  The split improves testability:
+
+* The numeric smoothing behaviour (EMA) can be unit tested without initializing
+  pygame or fonts (see `tests/test_performance_hud.py`).
+* Future exporters (e.g. JSON line logs, profiling samples, telemetry) can reuse
+  the metrics object without importing UI code.
+
+Typical usage (inside the main renderer):
+
+    hud = PerformanceHUD(enabled=True)
+    hud.begin_frame()
+    # ... do work ...
+    hud.end_work_segment()
+    # ... post effects / present ...
+    hud.end_frame()
+    hud.render(surface, y=game.BASE_H - 120)
+
+`begin_frame` sets both the *full* frame and *work* start markers.  The caller
+must explicitly signal the end of the work portion (everything up to but NOT
+including presenting) so the HUD can display both numbers, aiding diagnosis of
+how much time is spent in simulation / composition versus present / vsync.
+"""
+
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass, field
+from typing import Optional, Any
+
+
+@dataclass
+class PerformanceSample:
+    """Snapshot of performance metrics for a single frame.
+
+    Attributes:
+        work_ms (float): Time in milliseconds spent on CPU work (logic + render commands).
+            Excludes VSync/SwapBuffers time. High values indicate CPU bound.
+        full_ms (float | None): Total frame duration in milliseconds including VSync wait.
+            Should ideally match target frame time (e.g. 16.6ms for 60FPS).
+        avg_work_ms (float | None): Exponential Moving Average of work_ms for smoothing jitter.
+        fps (float | None): Instantaneous Frames Per Second as reported by the game clock.
+        theor_fps (float | None): Theoretical maximum FPS possible based solely on work_ms
+            (1000 / work_ms). Helps identify potential performance ceiling.
+        memory_rss (float | None): Resident Set Size (RSS) memory usage in Megabytes.
+            Indicates physical RAM currently used by the process.
+        asset_count (int | None): Total count of loaded AssetManager resources (Images + Sounds).
+            Useful for tracking asset leaks or loading spikes.
+    """
+
+    work_ms: float
+    full_ms: float | None
+    avg_work_ms: float | None
+    fps: float | None
+    theor_fps: float | None
+    memory_rss: float | None = None
+    asset_count: int | None = None
+
+
+@dataclass
+class PerformanceHUD:
+    """System for collecting and managing performance metrics.
+
+    Separates timing logic from rendering to allow headless profiling and
+    cleaner architecture.
+
+    Attributes:
+        enabled (bool): Master toggle. If False, overhead is minimized to near zero.
+        alpha (float): Smoothing factor (0.0 < alpha <= 1.0) for EMA calculations.
+            Lower values = smoother lines but more lag. Default 0.1.
+        log_path (Optional[str]): If provided, appends metrics to this CSV file path
+            each frame. Useful for session profiling.
+    """
+
+    enabled: bool = True
+    alpha: float = 0.1  # EMA smoothing factor for work segment
+    log_path: Optional[str] = None
+    _t_full_start: float = field(default=0.0, init=False, repr=False)
+    _t_work_start: float = field(default=0.0, init=False, repr=False)
+    _last_full_ms: float = field(default=0.0, init=False)
+    _avg_work_ms: Optional[float] = field(default=None, init=False)
+    _staging_sample: Optional[PerformanceSample] = field(default=None, init=False)
+    _visible_sample: Optional[PerformanceSample] = field(default=None, init=False)
+    _csv_file: Optional[Any] = field(default=None, init=False, repr=False)
+    _csv_writer: Optional[Any] = field(default=None, init=False, repr=False)
+
+    def begin_frame(self) -> None:
+        if not self.enabled:
+            return
+        now = time.perf_counter()
+        self._t_full_start = now
+        self._t_work_start = now
+
+    def end_work_segment(self) -> None:
+        """Mark the logical end of the *work* portion of the frame.
+
+        The *work* portion excludes final post-effects and the actual present
+        call (which may involve vsync waiting).  This separation helps
+        differentiate CPU simulation/composition time from present / swap
+        overhead.
+        """
+        if not self.enabled:
+            return
+        t_work_end = time.perf_counter()
+        work_ms = (t_work_end - self._t_work_start) * 1000.0
+        # Update EMA for work segment
+        if self._avg_work_ms is None:
+            self._avg_work_ms = work_ms
+        else:
+            self._avg_work_ms = self.alpha * work_ms + (1 - self.alpha) * self._avg_work_ms
+        # Temporarily store partial sample (full_ms, fps filled in at end_frame)
+        self._staging_sample = PerformanceSample(
+            work_ms=work_ms,
+            full_ms=None,
+            avg_work_ms=self._avg_work_ms,
+            fps=None,
+            theor_fps=(1000.0 / work_ms) if work_ms > 0 else None,
+        )
+
+    def end_frame(self, clock=None) -> None:  # clock optional to avoid circular imports in tests
+        if not self.enabled:
+            return
+        t_full_end = time.perf_counter()
+        full_ms = (t_full_end - self._t_full_start) * 1000.0
+        self._last_full_ms = full_ms
+        if self._staging_sample:
+            # Enrich existing partial sample
+            self._staging_sample.full_ms = full_ms
+            if clock is not None:
+                try:  # pragma: no cover - depends on pygame clock
+                    fps = clock.get_fps()
+                except Exception:  # pragma: no cover
+                    fps = None
+            else:
+                fps = None
+            self._staging_sample.fps = fps
+
+            # Collect system stats (memory, assets)
+            mem, assets = self._collect_sys_stats()
+            self._staging_sample.memory_rss = mem
+            self._staging_sample.asset_count = assets
+
+            if self.log_path:
+                self._log_sample()
+
+            # Promote fully completed sample to visible
+            self._visible_sample = self._staging_sample
+
+    def _collect_sys_stats(self) -> tuple[float | None, int | None]:
+        mem = None
+        assets = None
+        try:
+            import resource
+            import sys
+
+            usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            if sys.platform == "darwin":
+                mem = usage / (1024 * 1024)  # MB
+            else:
+                mem = usage / 1024  # MB
+        except ImportError:
+            pass
+
+        try:
+            from scripts.asset_manager import AssetManager
+
+            if AssetManager._instance is None:
+                assets = 0
+            else:
+                am = AssetManager.get()
+                # Count loaded surfaces and sounds
+                assets = len(am._images) + len(am._sounds)
+        except Exception:
+            pass
+
+        return mem, assets
+
+    def _log_sample(self) -> None:
+        if not self._staging_sample or not self.log_path:
+            return
+
+        import json
+
+        # Lazy init file
+        if self._csv_file is None:
+            import csv
+            import os
+
+            file_exists = os.path.isfile(self.log_path)
+            try:
+                self._csv_file = open(self.log_path, "a", newline="")
+                self._csv_writer = csv.writer(self._csv_file)
+                if not file_exists:
+                    self._csv_writer.writerow(["timestamp", "work_ms", "full_ms", "fps", "counts"])
+            except Exception:
+                # Silently fail if file can't be opened to avoid crashing game
+                self.log_path = None
+                return
+
+        if self._csv_writer is None:
+            return
+
+        import time
+
+        counts = getattr(self, "_game_counts", {})
+        try:
+            row = [
+                time.time(),
+                f"{self._staging_sample.work_ms:.3f}",
+                f"{self._staging_sample.full_ms:.3f}" if self._staging_sample.full_ms else "",
+                f"{self._staging_sample.fps:.2f}" if self._staging_sample.fps else "",
+                json.dumps(counts),
+            ]
+            self._csv_writer.writerow(row)
+        except Exception:
+            pass
+
+    @property
+    def last_sample(self) -> Optional[PerformanceSample]:
+        return self._staging_sample
+
+    @property
+    def last_full_frame_ms(self) -> float:
+        return self._last_full_ms
+
+    def render(self, surface, *, x: int = 5, y: int = 5) -> None:
+        """Delegate drawing to UI layer if enabled and a sample exists.
+
+        Import is local to avoid creating a hard dependency for pure logic tests.
+        """
+        # Use visible_sample (from previous frame) so we have full metrics
+        if not (self.enabled and self._visible_sample):
+            return
+        try:
+            from scripts.ui import UI
+
+            game_counts = getattr(self, "_game_counts", None)
+            UI.render_perf_overlay(
+                surface,
+                work_ms=self._visible_sample.work_ms,
+                frame_full_ms=self._visible_sample.full_ms,
+                avg_work_ms=self._visible_sample.avg_work_ms,
+                fps=self._visible_sample.fps,
+                theor_fps=self._visible_sample.theor_fps,
+                memory_rss=self._visible_sample.memory_rss,
+                asset_count=self._visible_sample.asset_count,
+                x=x,
+                y=y,
+                game_counts=game_counts,
+            )
+        except Exception:  # pragma: no cover - overlay optional in headless tests
+            pass
+
+
+__all__ = ["PerformanceHUD", "PerformanceSample"]

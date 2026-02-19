@@ -14,6 +14,9 @@ COIN_IMAGE_PATH = "collectables/coin.png"
 DATA_FILE = "data/collectables.json"
 APPLE_RESPAWN_MS = 5000
 APPLE_BUFF_MS = 5000
+HEART_RESPAWN_MS = 8000
+HEART_DESPAWN_MS = 10000
+HEART_HEAL_AMOUNT = 25
 
 
 @dataclass(frozen=True)
@@ -94,6 +97,8 @@ class CollectableManager:
         self.ammo_pickups = []
         self.apple_pickups = []
         self.apple_spawn_points = []
+        self.heart_spawn_points = []
+        self.heart_pickup = {"active": False, "rect": None, "pos": (0, 0), "spawned_at": 0, "next_spawn": 0}
         # Unified state fields persisted to JSON
         self.coins = 0
         self.gun = 0
@@ -119,6 +124,8 @@ class CollectableManager:
         self.ammo_pickups = []
         self.apple_pickups = []
         self.apple_spawn_points = []
+        self.heart_spawn_points = self._build_heart_spawn_points(tilemap)
+        self.heart_pickup = {"active": False, "rect": None, "pos": (0, 0), "spawned_at": 0, "next_spawn": 0}
 
         coin_tiles = tilemap.extract([("coin", 0)], keep=False)
         for tile in coin_tiles:
@@ -179,6 +186,8 @@ class CollectableManager:
                     apple["pickup"] = Collectables(self.game, next_pos, apple_anim)
                     apple["active"] = True
 
+        self._update_heart_pickup(player_rect)
+
     def render(self, surf, offset=(0, 0)):
         for coin in self.coin_list:
             coin.render(surf, offset=offset)
@@ -187,6 +196,62 @@ class CollectableManager:
         for apple in self.apple_pickups:
             if apple["active"]:
                 apple["pickup"].render(surf, offset=offset)
+        self._render_heart_pickup(surf, offset=offset)
+
+    def _build_heart_spawn_points(self, tilemap) -> List[tuple[int, int]]:
+        """Create candidate heart spawn locations on top of solid tiles."""
+        points: List[tuple[int, int]] = []
+        for key, tile in tilemap.tilemap.items():
+            if tile["type"] not in {"grass", "stone"}:
+                continue
+            tx, ty = tile["pos"]
+            above_key = f"{tx};{ty - 1}"
+            if above_key in tilemap.tilemap:
+                continue
+            # Spawn one tile above the solid tile.
+            points.append((tx * tilemap.tile_size, (ty - 1) * tilemap.tile_size))
+        return points
+
+    def _update_heart_pickup(self, player_rect: pygame.Rect) -> None:
+        if not self.heart_spawn_points:
+            return
+        rng = RNGService.get()
+        now = pygame.time.get_ticks()
+
+        if self.heart_pickup["active"]:
+            heart_rect = self.heart_pickup["rect"]
+            if heart_rect is not None and heart_rect.colliderect(player_rect):
+                player = getattr(self.game, "player", None)
+                if player is not None:
+                    player.health = min(player.health_max, player.health + HEART_HEAL_AMOUNT)
+                self.game.audio.play("collect")
+                self.heart_pickup["active"] = False
+                self.heart_pickup["rect"] = None
+                self.heart_pickup["next_spawn"] = now + HEART_RESPAWN_MS
+            elif now - self.heart_pickup["spawned_at"] >= HEART_DESPAWN_MS:
+                self.heart_pickup["active"] = False
+                self.heart_pickup["rect"] = None
+                self.heart_pickup["next_spawn"] = now + (HEART_RESPAWN_MS // 2)
+            return
+
+        if now < self.heart_pickup["next_spawn"]:
+            return
+        pos = self.heart_spawn_points[rng.randint(0, len(self.heart_spawn_points) - 1)]
+        self.heart_pickup["pos"] = pos
+        self.heart_pickup["rect"] = pygame.Rect(pos[0], pos[1], 16, 16)
+        self.heart_pickup["spawned_at"] = now
+        self.heart_pickup["active"] = True
+
+    def _render_heart_pickup(self, surf: pygame.Surface, offset=(0, 0)) -> None:
+        if not self.heart_pickup["active"]:
+            return
+        hx, hy = self.heart_pickup["pos"]
+        x = int(hx - offset[0] + 8)
+        y = int(hy - offset[1] + 8)
+        # Simple pixel-heart style marker.
+        pygame.draw.circle(surf, (220, 30, 60), (x - 3, y - 2), 4)
+        pygame.draw.circle(surf, (220, 30, 60), (x + 3, y - 2), 4)
+        pygame.draw.polygon(surf, (220, 30, 60), [(x - 8, y), (x + 8, y), (x, y + 10)])
 
     def load_collectables(self):
         if os.path.exists(DATA_FILE):

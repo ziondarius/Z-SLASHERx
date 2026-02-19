@@ -348,6 +348,7 @@ class GameState(State):
         from scripts.constants import (
             DEAD_ANIM_FADE_START,
             RESPAWN_DEAD_THRESHOLD,
+            SAVE_DEFAULT_LIVES,
             TRANSITION_MAX,
         )
         from scripts.level_cache import list_levels
@@ -416,7 +417,7 @@ class GameState(State):
                         replay_mgr.abort_current_run()
                     except Exception:
                         pass
-                g.load_level(g.level, player_lives_attr, respawn=True)
+                g.load_level(g.level, SAVE_DEFAULT_LIVES, respawn=True)
             if g.dead > RESPAWN_DEAD_THRESHOLD and player_lives_attr < 1:
                 if replay_mgr:
                     try:

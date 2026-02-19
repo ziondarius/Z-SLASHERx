@@ -166,15 +166,13 @@ class MenuState(State):
         self.options_keys = [
             "menu.play",
             "menu.levels",
-            "menu.store",
-            "menu.accessories",
             "menu.options",
             "menu.quit",
         ]
         # Translate initially
         self.options = [self.loc.translate(k) for k in self.options_keys]
 
-        self.list_widget = ScrollableListWidget(self.options, visible_rows=6, spacing=50, font_size=30)
+        self.list_widget = ScrollableListWidget(self.options, visible_rows=5, spacing=50, font_size=30)
         self.selected = 0  # legacy compatibility (to be removed)
         self.enter = False
         self.quit_requested = False
@@ -207,10 +205,6 @@ class MenuState(State):
                 self.quit_requested = True
             elif key == "menu.levels":
                 self.next_state = "Levels"
-            elif key == "menu.store":
-                self.next_state = "Store"
-            elif key == "menu.accessories":
-                self.next_state = "Accessories"
             elif key == "menu.options":
                 self.next_state = "Options"
             # Future: branch to other submenus (Levels/Store/etc.) via state transitions
@@ -454,15 +448,11 @@ class GameState(State):
         # Clouds
         if hasattr(g, "clouds"):
             g.clouds.update()
-        # Moving obstacles update
+        # Moving obstacles (frozen): keep hazards in fixed base positions.
         if hasattr(g, "moving_obstacles"):
-            t = pygame.time.get_ticks()
             for obs in g.moving_obstacles:
-                wave = math.sin((t * obs["speed"]) + obs["phase"])
-                ox = obs["base"][0] + (obs["amp"] * wave if obs["axis"] == "x" else 0)
-                oy = obs["base"][1] + (obs["amp"] * wave if obs["axis"] == "y" else 0)
-                obs["rect"].x = int(ox)
-                obs["rect"].y = int(oy)
+                obs["rect"].x = int(obs["base"][0])
+                obs["rect"].y = int(obs["base"][1])
 
         # Enemies
         for enemy in g.enemies.copy():
@@ -1075,9 +1065,10 @@ class OptionsState(State):
         self.bg = pygame.image.load("data/images/background-big.png")
         self._ui = UI
         self.settings = settings
-        self.widget = ScrollableListWidget([], visible_rows=5, spacing=50, font_size=30)
+        self.widget = ScrollableListWidget([], visible_rows=6, spacing=50, font_size=30)
         self.request_back = False
         self.enter = False
+        self.message = ""
 
     def _apply_fullscreen(self) -> None:
         if self.settings.fullscreen:
@@ -1093,6 +1084,14 @@ class OptionsState(State):
                 self.widget.move_down()
             elif a in ("menu_back", "menu_quit"):
                 self.request_back = True
+            elif a == "menu_select":
+                idx = self.widget.selected_index
+                if idx == 4:
+                    from scripts.progress_tracker import get_progress_tracker
+
+                    get_progress_tracker().reset_progress()
+                    self.settings.selected_level = 0
+                    self.message = self.loc.translate("options.progress_reset")
             elif a == "options_left" or a == "options_right":
                 # Cycle or toggle
                 idx = self.widget.selected_index
@@ -1109,7 +1108,7 @@ class OptionsState(State):
                     # Toggle mode
                     current = self.settings.ghost_mode
                     self.settings.ghost_mode = "last" if current == "best" else "best"
-                elif idx == 4:
+                elif idx == 5:
                     self.settings.fullscreen = not self.settings.fullscreen
                     self._apply_fullscreen()
 
@@ -1123,6 +1122,7 @@ class OptionsState(State):
             self.loc.translate("options.sound_volume", int(self.settings.sound_volume * 100)),
             self.loc.translate("options.ghosts", ghosts_status),
             self.loc.translate("options.ghost_mode", self.settings.ghost_mode.upper()),
+            self.loc.translate("options.reset_progress"),
             f"Fullscreen: {'ON' if self.settings.fullscreen else 'OFF'}",
         ]
 
@@ -1131,6 +1131,8 @@ class OptionsState(State):
         UI.render_menu_bg(surface, self.display, self.bg)
         UI.render_menu_title(surface, self.loc.translate("options.title"), surface.get_width() // 2, 160)
         self.widget.render(surface, surface.get_width() // 2, 260)
+        if self.message:
+            UI.render_menu_msg(surface, self.message, surface.get_width() // 2, surface.get_height() - 110)
         UI.render_menu_ui_element(surface, self.loc.translate("menu.back_hint"), 20, surface.get_height() - 40)
 
 

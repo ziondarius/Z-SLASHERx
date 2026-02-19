@@ -6,8 +6,8 @@ import pygame
 class KeyboardManager:
     def __init__(self, game):
         self.game = game
-        self._right_was_down = False
-        self._right_down_since = 0
+        self._dash_was_down = False
+        self._dash_down_since = 0
         self._shadow_started_from_hold = False
 
     # New centralized event processing (Issue 10 migration support)
@@ -130,22 +130,26 @@ class KeyboardManager:
 
         mouse_buttons = pygame.mouse.get_pressed()
         left = bool(mouse_buttons[0])
-        right = bool(mouse_buttons[2])
 
         if left:  # Left mouse button
             self.game.player.shoot()
+
+        # Dash / Black Mist on Space:
+        # - Tap Space: dash immediately
+        # - Hold Space >= 2s: enable black mist while held
+        keys = pygame.key.get_pressed()
+        dash_held = bool(keys[pygame.K_SPACE])
         now = pygame.time.get_ticks()
-        if right and not self._right_was_down:
-            # Tap starts regular dash immediately.
+        if dash_held and not self._dash_was_down:
             self.game.player.dash()
-            self._right_down_since = now
+            self._dash_down_since = now
             self._shadow_started_from_hold = False
-        if right and self._right_was_down and not self._shadow_started_from_hold:
-            if now - self._right_down_since >= 2000 and hasattr(self.game.player, "set_shadow_form"):
+        if dash_held and self._dash_was_down and not self._shadow_started_from_hold:
+            if now - self._dash_down_since >= 2000 and hasattr(self.game.player, "set_shadow_form"):
                 self.game.player.set_shadow_form(True)
                 self._shadow_started_from_hold = True
-        if (not right) and self._right_was_down:
+        if (not dash_held) and self._dash_was_down:
             if hasattr(self.game.player, "set_shadow_form"):
                 self.game.player.set_shadow_form(False)
             self._shadow_started_from_hold = False
-        self._right_was_down = right
+        self._dash_was_down = dash_held

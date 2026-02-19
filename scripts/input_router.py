@@ -17,12 +17,12 @@ Design (minimal iteration):
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Iterable, List
+from typing import Callable, Dict, Iterable, List, Optional
 
 import pygame
 
 Action = str
-Rule = Callable[[pygame.event.Event], Action | None]
+Rule = Callable[[pygame.event.Event], Optional[Action]]
 
 
 def _key_rule(key: int, action: Action, event_type=pygame.KEYDOWN) -> Rule:

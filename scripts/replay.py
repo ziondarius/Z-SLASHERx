@@ -21,7 +21,7 @@ from scripts.entities import Player
 REPLAY_VERSION = 2
 
 
-@dataclass(slots=True)
+@dataclass
 class FrameSample:
     """Single frame of replay data (Legacy Visual Ghost)."""
 

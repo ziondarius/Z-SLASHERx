@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Localization Service (Issue 56).
 
 Handles loading and retrieving localized strings.

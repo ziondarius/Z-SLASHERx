@@ -55,8 +55,8 @@ class Settings:
                 "debug_toggle": [pygame.K_F1],
                 "left": [pygame.K_LEFT, pygame.K_a],
                 "right": [pygame.K_RIGHT, pygame.K_d],
-                "jump": [pygame.K_UP, pygame.K_w, pygame.K_SPACE],
-                "dash": [pygame.K_x],
+                "jump": [pygame.K_UP, pygame.K_w],
+                "dash": [pygame.K_SPACE],
                 "shoot": [pygame.K_c],
             },
             "PauseState": {

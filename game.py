@@ -155,18 +155,8 @@ class Game:
         self.audio.apply_volumes()
 
     def _apply_boss_for_level(self):
-        try:
-            lvl = int(self.level)
-        except Exception:
-            return
-        if lvl <= 0 or (lvl % 2) != 0:
-            return
-        if not getattr(self, "enemies", None):
-            return
-        # Promote the first enemy to boss for this level.
-        boss = self.enemies[0]
-        if hasattr(boss, "make_boss"):
-            boss.make_boss()
+        # Boss encounters disabled: keep all enemies in normal mode.
+        return
 
     def load_level(self, map_id, lives=3, respawn=False):
         self.timer.reset()
@@ -219,9 +209,6 @@ class Game:
                 if spawner["variant"] == 1:
                     self.enemies.append(Enemy(self, spawner["pos"], (8, 15), enemy_id))
                     enemy_id += 1
-                    # Add occasional spike hazards near enemy spawn points.
-                    if enemy_id % 2 == 0:
-                        self.spikes.append(pygame.Rect(spawner["pos"][0], spawner["pos"][1] + 12, 14, 8))
         else:
             # Capture RNG state at start of level
             self.level_rng_state = rng.get_state()
@@ -248,8 +235,6 @@ class Game:
                 else:
                     self.enemies.append(Enemy(self, spawner["pos"], (8, 15), enemy_id))
                     enemy_id += 1
-                    if enemy_id % 2 == 0:
-                        self.spikes.append(pygame.Rect(spawner["pos"][0], spawner["pos"][1] + 12, 14, 8))
             self.saves = 1
 
             # Set the current player if there are any players

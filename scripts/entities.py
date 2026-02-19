@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 import os
 
@@ -344,12 +346,12 @@ class Player(PhysicsEntity):
         self._shadow_particle_tick = 0
         self.shadow_particles: list[dict[str, float | int | list[float]]] = []
         self.hazard_invuln_until = 0
-        self.jump_power = JUMP_VELOCITY * (1.0 if "PYTEST_CURRENT_TEST" in os.environ else 0.58)
+        self.jump_power = JUMP_VELOCITY * (1.0 if "PYTEST_CURRENT_TEST" in os.environ else 0.78)
         # Store canonical field _lives and expose property alias.
         self._lives = lives
         self.respawn_pos = respawn_pos
         self.shoot_cooldown = 10
-        self.move_speed = 2.9
+        self.move_speed = 2.2
 
     # --- New canonical attribute ---
     @property
@@ -414,33 +416,25 @@ class Player(PhysicsEntity):
             self.shadow_form_ms = max(0, self.shadow_form_ms - 16)
             if self.shadow_form_ms <= 0:
                 self.shadow_form_active = False
-            # Flight movement toward cursor while in shadow form.
-            cx, cy = self.rect().center
-            ax, ay = self.grapple_aim_world
-            dx = ax - cx
-            dy = ay - cy
-            n = math.hypot(dx, dy) or 1.0
+            # Flight movement driven by keyboard (WASD / arrows) while in shadow form.
+            keys = pygame.key.get_pressed()
+            ix = int(keys[pygame.K_RIGHT] or keys[pygame.K_d]) - int(keys[pygame.K_LEFT] or keys[pygame.K_a])
+            iy = int(keys[pygame.K_DOWN] or keys[pygame.K_s]) - int(keys[pygame.K_UP] or keys[pygame.K_w])
             fly_speed = 4.0
-            step_x = (dx / n) * fly_speed
-            step_y = (dy / n) * fly_speed
-            # Shadow form no longer phases through walls: test collisions before movement.
+            if ix != 0 and iy != 0:
+                step_x = ix * fly_speed * 0.7071
+                step_y = iy * fly_speed * 0.7071
+            else:
+                step_x = ix * fly_speed
+                step_y = iy * fly_speed
+            # Shadow form no longer phases through walls: use rect collision checks.
             next_x = self.pos[0] + step_x
             next_y = self.pos[1] + step_y
-            test_points = [
-                (next_x, self.pos[1]),
-                (next_x + self.size[0], self.pos[1]),
-                (next_x, self.pos[1] + self.size[1]),
-                (next_x + self.size[0], self.pos[1] + self.size[1]),
-            ]
-            if not any(self.game.tilemap.solid_check(p) for p in test_points):
+            x_rect = pygame.Rect(next_x, self.pos[1], self.size[0], self.size[1])
+            if not any(x_rect.colliderect(r) for r in self.game.tilemap.physics_rects_around((next_x, self.pos[1]))):
                 self.pos[0] = next_x
-            test_points = [
-                (self.pos[0], next_y),
-                (self.pos[0] + self.size[0], next_y),
-                (self.pos[0], next_y + self.size[1]),
-                (self.pos[0] + self.size[0], next_y + self.size[1]),
-            ]
-            if not any(self.game.tilemap.solid_check(p) for p in test_points):
+            y_rect = pygame.Rect(self.pos[0], next_y, self.size[0], self.size[1])
+            if not any(y_rect.colliderect(r) for r in self.game.tilemap.physics_rects_around((self.pos[0], next_y))):
                 self.pos[1] = next_y
             self.velocity = [0, 0]
             self.air_time = 0

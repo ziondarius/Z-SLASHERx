@@ -106,6 +106,12 @@ class ProgressTracker:
     def get_unlocked_levels(self) -> List[int]:
         return sorted(self.unlocked)
 
+    def reset_progress(self) -> None:
+        """Reset progression so only level 0 is unlocked."""
+        self.unlocked = {0}
+        self._sync_settings()
+        log.info("Progress reset to level 0")
+
 
 _tracker: ProgressTracker | None = None
 

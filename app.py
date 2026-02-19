@@ -14,14 +14,12 @@ import pygame
 from scripts.input_router import InputRouter
 from scripts.settings import settings
 from scripts.state_manager import (
-    AccessoriesState,
     GameState,
     LevelsState,
     MenuState,
     OptionsState,
     PauseState,
     StateManager,
-    StoreState,
 )
 
 
@@ -67,15 +65,11 @@ def main():
                 cur.next_state = None
                 if nxt == "Levels":
                     sm.set(LevelsState())
-                elif nxt == "Store":
-                    sm.set(StoreState())
-                elif nxt == "Accessories":
-                    sm.set(AccessoriesState())
                 elif nxt == "Options":
                     sm.set(OptionsState())
                 cur = sm.current
         # Generic back handling for submenu states
-        if isinstance(cur, (LevelsState, StoreState, AccessoriesState, OptionsState)):
+        if isinstance(cur, (LevelsState, OptionsState)):
             if getattr(cur, "request_back", False):
                 sm.set(MenuState())
                 cur = sm.current

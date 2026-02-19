@@ -41,6 +41,6 @@ AIR_TIME_FATAL = 420  # frames in air before considered 'dead'
 
 # Misc
 LEAF_SPAWNER_CLOUD_COUNT = 16  # number of clouds (also used for initial cloud count)
-SAVE_DEFAULT_LIVES = 3
+SAVE_DEFAULT_LIVES = 4
 
 __all__ = [name for name in globals().keys() if name.isupper()]

@@ -7,6 +7,7 @@ import pygame
 
 from scripts.entities import Enemy, Player
 from scripts.logger import get_logger
+from scripts.constants import SAVE_DEFAULT_LIVES
 from scripts.settings import settings
 from scripts.utils import Animation
 
@@ -191,7 +192,7 @@ class Tilemap:
 
                 for player_data in entities_data.get("players", []):
                     # Backward compatibility: accept 'lifes' or 'lives'. Prefer 'lives'.
-                    lives_value = player_data.get("lives", player_data.get("lifes", 3))
+                    lives_value = player_data.get("lives", player_data.get("lifes", SAVE_DEFAULT_LIVES))
                     player = Player(
                         self.game,
                         player_data["pos"],

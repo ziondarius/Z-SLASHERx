@@ -11,6 +11,7 @@ from scripts.constants import (
     DEAD_ANIM_FADE_START,
     LEAF_SPAWNER_CLOUD_COUNT,
     RESPAWN_DEAD_THRESHOLD,
+    SAVE_DEFAULT_LIVES,
     TRANSITION_MAX,
     TRANSITION_START,
 )
@@ -158,7 +159,7 @@ class Game:
         # Boss encounters disabled: keep all enemies in normal mode.
         return
 
-    def load_level(self, map_id, lives=3, respawn=False):
+    def load_level(self, map_id, lives=SAVE_DEFAULT_LIVES, respawn=False):
         self.timer.reset()
         self.tilemap.load("data/maps/" + str(map_id) + ".json")
         # Precompute immutable tile type counts for performance HUD (tiles static during gameplay)
@@ -240,18 +241,7 @@ class Game:
             # Set the current player if there are any players
             if self.players:
                 self.player = self.players[self.playerID]
-            # Create moving obstacles from first few enemy spawns for challenge.
-            for i, enemy in enumerate(self.enemies[:6]):
-                self.moving_obstacles.append(
-                    {
-                        "base": [enemy.pos[0], enemy.pos[1] - 8],
-                        "axis": "x" if i % 2 == 0 else "y",
-                        "amp": 24 + (i % 3) * 10,
-                        "speed": 0.03 + (i % 3) * 0.01,
-                        "phase": i * 0.8,
-                        "rect": pygame.Rect(enemy.pos[0], enemy.pos[1] - 8, 12, 12),
-                    }
-                )
+            # Moving damage boxes removed.
         self._apply_boss_for_level()
         # END LOAD LEVEL
 

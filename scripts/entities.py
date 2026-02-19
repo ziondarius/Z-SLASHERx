@@ -201,9 +201,6 @@ class Enemy(PhysicsEntity):
 
         # Apply movement intent
         intent_movement = decision.get("movement", (0, 0))
-        player = getattr(self.game, "player", None)
-        if player:
-            self.flip = player.pos[0] < self.pos[0]
         # Combine with external movement (if any) or replace?
         # Usually update's movement arg is external forces.
         combined_movement = (movement[0] + intent_movement[0], movement[1] + intent_movement[1])
@@ -256,9 +253,6 @@ class Enemy(PhysicsEntity):
                 self.boss_cooldown = 75
 
         super().update(tilemap, movement=combined_movement)
-        player = getattr(self.game, "player", None)
-        if player:
-            self.flip = player.pos[0] < self.pos[0]
 
         if combined_movement[0] != 0:
             self.set_action("run")

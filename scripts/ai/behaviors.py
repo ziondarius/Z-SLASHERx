@@ -11,47 +11,34 @@ from scripts.settings import settings
 
 
 class ScriptedEnemyPolicy(Policy):
-    """Replicates the legacy random walk and shoot behavior."""
+    """Patrol platform edges/walls and shoot only when facing the player."""
 
     def decide(self, entity: Any, context: Any) -> Dict[str, Any]:
         game = entity.game
-        rng = RNGService.get()
-
         result = {"movement": (0, 0), "shoot": False, "shoot_direction": 0}
+        tilemap = game.tilemap
+        check_x = entity.rect().centerx + (-7 if entity.flip else 7)
+        check_y = entity.pos[1] + 23
 
-        if entity.walking:
-            tilemap = game.tilemap
-
-            # Solid check ahead
-            check_x = entity.rect().centerx + (-7 if entity.flip else 7)
-            check_y = entity.pos[1] + 23
-
-            if tilemap.solid_check((check_x, check_y)):
-                # Wall collision check
-                if entity.collisions["right"] or entity.collisions["left"]:
-                    entity.flip = not entity.flip
-                else:
-                    # Move
-                    direction = ENEMY_DIRECTION_BASE * (
-                        1 + ENEMY_DIRECTION_SCALE_LOG * math.log(settings.selected_level + 1)
-                    )
-                    move_x = -direction if entity.flip else direction
-                    result["movement"] = (move_x, 0)
-            else:
-                # Cliff edge, turn around
+        # Turn around at walls or platform edges; otherwise keep walking.
+        if tilemap.solid_check((check_x, check_y)):
+            if entity.collisions["right"] or entity.collisions["left"]:
                 entity.flip = not entity.flip
+            else:
+                direction = ENEMY_DIRECTION_BASE * (1 + ENEMY_DIRECTION_SCALE_LOG * math.log(settings.selected_level + 1))
+                move_x = -direction if entity.flip else direction
+                result["movement"] = (move_x, 0)
+        else:
+            entity.flip = not entity.flip
 
-            entity.walking = max(0, entity.walking - 1)
-
-            if not entity.walking:
-                self._check_shoot(entity, game, result)
-
-        elif rng.random() < 0.01:
-            entity.walking = rng.randint(30, 120)
-
+        self._check_shoot(entity, game, result)
         return result
 
     def _check_shoot(self, entity, game, result):
+        cooldown = int(getattr(entity, "shoot_cooldown_enemy", 0))
+        if cooldown > 0:
+            setattr(entity, "shoot_cooldown_enemy", cooldown - 1)
+            return
         dis = (
             game.player.pos[0] - entity.pos[0],
             game.player.pos[1] - entity.pos[1],
@@ -60,9 +47,11 @@ class ScriptedEnemyPolicy(Policy):
             if entity.flip and dis[0] < 0:  # Facing left, player to left
                 result["shoot"] = True
                 result["shoot_direction"] = -1
+                setattr(entity, "shoot_cooldown_enemy", 45)
             if not entity.flip and dis[0] > 0:  # Facing right, player to right
                 result["shoot"] = True
                 result["shoot_direction"] = 1
+                setattr(entity, "shoot_cooldown_enemy", 45)
 
 
 class PatrolPolicy(Policy):

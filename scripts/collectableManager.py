@@ -123,7 +123,7 @@ class CollectableManager:
         self.ammo_pickups = []
         self.apple_pickups = []
         self.apple_spawn_points = []
-        self.heart_spawn_points = self._build_heart_spawn_points(tilemap)
+        self.heart_spawn_points = []
         self.heart_pickup = {"active": False, "rect": None, "pos": (0, 0), "spawned_at": 0, "next_spawn": 0}
 
         coin_tiles = tilemap.extract([("coin", 0)], keep=False)
@@ -135,6 +135,14 @@ class CollectableManager:
         for tile in ammo_tiles:
             self.ammo_pickups.append(Collectables(self.game, tile["pos"], self.game.assets["ammo"]))
             self.apple_spawn_points.append(tuple(tile["pos"]))
+
+        # Hearts should spawn at known-visible pickup points first.
+        if self.apple_spawn_points:
+            self.heart_spawn_points = list(dict.fromkeys(self.apple_spawn_points))
+        else:
+            self.heart_spawn_points = self._build_heart_spawn_points(tilemap)
+        # Avoid off-screen negative Y spawn positions.
+        self.heart_spawn_points = [p for p in self.heart_spawn_points if p[1] >= 0]
 
         # Use dedicated apple animation (falls back to coin if missing).
         apple_anim = self.game.assets.get("apple", self.game.assets["coin"])
@@ -151,6 +159,14 @@ class CollectableManager:
                         "respawn_at": 0,
                     }
                 )
+        # Spawn one heart immediately so it is visible at level start.
+        if self.heart_spawn_points:
+            rng = RNGService.get()
+            pos = self.heart_spawn_points[rng.randint(0, len(self.heart_spawn_points) - 1)]
+            self.heart_pickup["pos"] = pos
+            self.heart_pickup["rect"] = pygame.Rect(pos[0], pos[1], 16, 16)
+            self.heart_pickup["spawned_at"] = pygame.time.get_ticks()
+            self.heart_pickup["active"] = True
 
     def update(self, player_rect):
         for coin in self.coin_list[:]:

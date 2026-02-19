@@ -179,6 +179,7 @@ class Renderer:
             color = (50, 220, 90) if hp > hp_max * 0.4 else (230, 190, 45) if hp > hp_max * 0.2 else (220, 50, 50)
             pygame.draw.rect(game.display_2, color, (bx, by, fill_w, bh))
             pygame.draw.rect(game.display_2, (255, 255, 255), (bx, by, bw, bh), 1)
+            UI.render_menu_ui_element(game.display_2, f"HP: {hp}/{hp_max}", game.BASE_W - 170, 24)
             # Timers for power states
             now = pygame.time.get_ticks()
             apple_ms = max(0, int(getattr(game.player, "infinite_jump_until", 0)) - now)

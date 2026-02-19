@@ -15,8 +15,7 @@ DATA_FILE = "data/collectables.json"
 APPLE_RESPAWN_MS = 5000
 APPLE_BUFF_MS = 5000
 HEART_RESPAWN_MS = 8000
-HEART_DESPAWN_MS = 10000
-HEART_HEAL_AMOUNT = 25
+HEART_HEAL_AMOUNT = 40
 
 
 @dataclass(frozen=True)
@@ -222,21 +221,19 @@ class CollectableManager:
             heart_rect = self.heart_pickup["rect"]
             if heart_rect is not None and heart_rect.colliderect(player_rect):
                 player = getattr(self.game, "player", None)
-                if player is not None:
+                if player is not None and player.health < player.health_max:
                     player.health = min(player.health_max, player.health + HEART_HEAL_AMOUNT)
-                self.game.audio.play("collect")
-                self.heart_pickup["active"] = False
-                self.heart_pickup["rect"] = None
-                self.heart_pickup["next_spawn"] = now + HEART_RESPAWN_MS
-            elif now - self.heart_pickup["spawned_at"] >= HEART_DESPAWN_MS:
-                self.heart_pickup["active"] = False
-                self.heart_pickup["rect"] = None
-                self.heart_pickup["next_spawn"] = now + (HEART_RESPAWN_MS // 2)
+                    self.game.audio.play("collect")
+                    self.heart_pickup["active"] = False
+                    self.heart_pickup["rect"] = None
+                    self.heart_pickup["next_spawn"] = now + HEART_RESPAWN_MS
             return
 
         if now < self.heart_pickup["next_spawn"]:
             return
-        pos = self.heart_spawn_points[rng.randint(0, len(self.heart_spawn_points) - 1)]
+        pos = self.heart_pickup["pos"]
+        if pos == (0, 0):
+            pos = self.heart_spawn_points[rng.randint(0, len(self.heart_spawn_points) - 1)]
         self.heart_pickup["pos"] = pos
         self.heart_pickup["rect"] = pygame.Rect(pos[0], pos[1], 16, 16)
         self.heart_pickup["spawned_at"] = now

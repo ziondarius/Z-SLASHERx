@@ -47,11 +47,11 @@ class ScriptedEnemyPolicy(Policy):
             if entity.flip and dis[0] < 0:  # Facing left, player to left
                 result["shoot"] = True
                 result["shoot_direction"] = -1
-                setattr(entity, "shoot_cooldown_enemy", 45)
+                setattr(entity, "shoot_cooldown_enemy", 120)
             if not entity.flip and dis[0] > 0:  # Facing right, player to right
                 result["shoot"] = True
                 result["shoot_direction"] = 1
-                setattr(entity, "shoot_cooldown_enemy", 45)
+                setattr(entity, "shoot_cooldown_enemy", 120)
 
 
 class PatrolPolicy(Policy):

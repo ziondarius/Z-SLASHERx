@@ -250,6 +250,10 @@ class CollectableManager:
         for gapple in self.golden_apple_pickups:
             if gapple["active"]:
                 gapple["pickup"].render(surf, offset=offset)
+                gx = int(gapple["pickup"].pos[0] - offset[0] + 8)
+                gy = int(gapple["pickup"].pos[1] - offset[1] + 8)
+                pygame.draw.circle(surf, (255, 220, 80), (gx, gy), 7, 1)
+                pygame.draw.circle(surf, (255, 245, 170), (gx, gy), 3)
         self._render_heart_pickup(surf, offset=offset)
 
     def _build_golden_apple_animation(self, base_anim):
@@ -257,10 +261,13 @@ class CollectableManager:
         images = []
         for frame in base_anim.images:
             tinted = frame.copy()
-            # Warm gold tint while preserving sprite shape.
+            # Warm gold tint while preserving sprite shape; boosted for readability.
             tint = pygame.Surface(tinted.get_size(), pygame.SRCALPHA)
             tint.fill((255, 220, 90, 255))
             tinted.blit(tint, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            glow = pygame.Surface(tinted.get_size(), pygame.SRCALPHA)
+            glow.fill((70, 50, 0, 0))
+            tinted.blit(glow, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
             images.append(tinted)
         return Animation(images, img_dur=base_anim.img_duration, loop=base_anim.loop)
 

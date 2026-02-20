@@ -420,6 +420,12 @@ class Player(PhysicsEntity):
                 step_y = iy * fly_speed
             self.pos[0] += step_x
             self.pos[1] += step_y
+            # Keep golden-flight within current level bounds.
+            bounds = getattr(self.game, "_minimap_bounds", None)
+            if bounds:
+                min_x, min_y, max_x, max_y = bounds
+                self.pos[0] = max(min_x, min(self.pos[0], max_x - self.size[0]))
+                self.pos[1] = max(min_y, min(self.pos[1], max_y - self.size[1]))
             self.velocity = [0, 0]
             self.air_time = 0
             self.jumps = 2

@@ -9,14 +9,11 @@ import pygame
 
 from scripts.collectables import Collectables
 from scripts.rng_service import RNGService
-from scripts.utils import Animation
 
 COIN_IMAGE_PATH = "collectables/coin.png"
 DATA_FILE = "data/collectables.json"
 APPLE_RESPAWN_MS = 5000
 APPLE_BUFF_MS = 5000
-GOLDEN_APPLE_RESPAWN_MS = 15000
-GOLDEN_APPLE_BUFF_MS = 7000
 HEART_RESPAWN_MS = 8000
 HEART_HEAL_AMOUNT = 40
 
@@ -98,7 +95,6 @@ class CollectableManager:
         self.game = game
         self.ammo_pickups = []
         self.apple_pickups = []
-        self.golden_apple_pickups = []
         self.apple_spawn_points = []
         self.heart_spawn_points = []
         self.heart_pickup = {"active": False, "rect": None, "pos": (0, 0), "spawned_at": 0, "next_spawn": 0}
@@ -126,7 +122,6 @@ class CollectableManager:
         self.coin_list = []
         self.ammo_pickups = []
         self.apple_pickups = []
-        self.golden_apple_pickups = []
         self.apple_spawn_points = []
         self.heart_spawn_points = []
         self.heart_pickup = {"active": False, "rect": None, "pos": (0, 0), "spawned_at": 0, "next_spawn": 0}
@@ -164,16 +159,6 @@ class CollectableManager:
                         "respawn_at": 0,
                     }
                 )
-            # Golden apple: rarer, stronger buff.
-            golden_anim = self._build_golden_apple_animation(apple_anim)
-            gpos = points[-1]
-            self.golden_apple_pickups.append(
-                {
-                    "pickup": Collectables(self.game, gpos, golden_anim),
-                    "active": True,
-                    "respawn_at": 0,
-                }
-            )
         # Spawn one heart immediately so it is visible at level start.
         if self.heart_spawn_points:
             rng = RNGService.get()
@@ -216,27 +201,6 @@ class CollectableManager:
                     apple["pickup"] = Collectables(self.game, next_pos, apple_anim)
                     apple["active"] = True
 
-        if self.golden_apple_pickups and self.apple_spawn_points:
-            rng = RNGService.get()
-            now = pygame.time.get_ticks()
-            for gapple in self.golden_apple_pickups:
-                if gapple["active"]:
-                    if gapple["pickup"].update(player_rect):
-                        gapple["active"] = False
-                        gapple["respawn_at"] = now + GOLDEN_APPLE_RESPAWN_MS
-                        if hasattr(self.game, "player") and self.game.player:
-                            self.game.player.golden_apple_until = max(
-                                getattr(self.game.player, "golden_apple_until", 0),
-                                now + GOLDEN_APPLE_BUFF_MS,
-                            )
-                        self.game.audio.play("collect")
-                elif now >= gapple["respawn_at"]:
-                    next_pos = self.apple_spawn_points[rng.randint(0, len(self.apple_spawn_points) - 1)]
-                    apple_anim = self.game.assets.get("apple", self.game.assets["coin"])
-                    golden_anim = self._build_golden_apple_animation(apple_anim)
-                    gapple["pickup"] = Collectables(self.game, next_pos, golden_anim)
-                    gapple["active"] = True
-
         self._update_heart_pickup(player_rect)
 
     def render(self, surf, offset=(0, 0)):
@@ -247,29 +211,7 @@ class CollectableManager:
         for apple in self.apple_pickups:
             if apple["active"]:
                 apple["pickup"].render(surf, offset=offset)
-        for gapple in self.golden_apple_pickups:
-            if gapple["active"]:
-                gapple["pickup"].render(surf, offset=offset)
-                gx = int(gapple["pickup"].pos[0] - offset[0] + 8)
-                gy = int(gapple["pickup"].pos[1] - offset[1] + 8)
-                pygame.draw.circle(surf, (255, 220, 80), (gx, gy), 7, 1)
-                pygame.draw.circle(surf, (255, 245, 170), (gx, gy), 3)
         self._render_heart_pickup(surf, offset=offset)
-
-    def _build_golden_apple_animation(self, base_anim):
-        """Create a gold-tinted animation using the regular apple sprites."""
-        images = []
-        for frame in base_anim.images:
-            tinted = frame.copy()
-            # Warm gold tint while preserving sprite shape; boosted for readability.
-            tint = pygame.Surface(tinted.get_size(), pygame.SRCALPHA)
-            tint.fill((255, 220, 90, 255))
-            tinted.blit(tint, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-            glow = pygame.Surface(tinted.get_size(), pygame.SRCALPHA)
-            glow.fill((70, 50, 0, 0))
-            tinted.blit(glow, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
-            images.append(tinted)
-        return Animation(images, img_dur=base_anim.img_duration, loop=base_anim.loop)
 
     def _build_heart_spawn_points(self, tilemap) -> List[tuple[int, int]]:
         """Create candidate heart spawn locations on top of solid tiles."""

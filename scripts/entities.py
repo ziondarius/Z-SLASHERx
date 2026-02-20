@@ -336,7 +336,6 @@ class Player(PhysicsEntity):
         self.shadow_form_active = False
         self.shadow_form_max_ms = 5000
         self.shadow_form_ms = self.shadow_form_max_ms
-        self.golden_apple_until = 0
         self._shadow_requested = False
         self._shadow_particle_tick = 0
         self.shadow_particles: list[dict[str, float | int | list[float]]] = []
@@ -406,32 +405,6 @@ class Player(PhysicsEntity):
             p["ttl"] -= 1
             if p["ttl"] <= 0:
                 self.shadow_particles.remove(p)
-        # Golden apple power: fly + phase through walls.
-        if now < self.golden_apple_until:
-            keys = pygame.key.get_pressed()
-            ix = int(keys[pygame.K_RIGHT] or keys[pygame.K_d]) - int(keys[pygame.K_LEFT] or keys[pygame.K_a])
-            iy = int(keys[pygame.K_DOWN] or keys[pygame.K_s]) - int(keys[pygame.K_UP] or keys[pygame.K_w])
-            fly_speed = 4.8
-            if ix != 0 and iy != 0:
-                step_x = ix * fly_speed * 0.7071
-                step_y = iy * fly_speed * 0.7071
-            else:
-                step_x = ix * fly_speed
-                step_y = iy * fly_speed
-            self.pos[0] += step_x
-            self.pos[1] += step_y
-            # Keep golden-flight within current level bounds.
-            bounds = getattr(self.game, "_minimap_bounds", None)
-            if bounds:
-                min_x, min_y, max_x, max_y = bounds
-                self.pos[0] = max(min_x, min(self.pos[0], max_x - self.size[0]))
-                self.pos[1] = max(min_y, min(self.pos[1], max_y - self.size[1]))
-            self.velocity = [0, 0]
-            self.air_time = 0
-            self.jumps = 2
-            self.wall_slide = False
-            self.set_action("idle")
-            return
         if self._shadow_requested and self.shadow_form_ms > 0:
             self.shadow_form_active = True
         if self.shadow_form_active:

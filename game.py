@@ -162,6 +162,25 @@ class Game:
     def load_level(self, map_id, lives=SAVE_DEFAULT_LIVES, respawn=False):
         self.timer.reset()
         self.tilemap.load("data/maps/" + str(map_id) + ".json")
+        # Precompute world bounds for HUD minimap projection.
+        try:
+            tiles = list(self.tilemap.tilemap.values())
+            if tiles:
+                ts = self.tilemap.tile_size
+                min_tx = min(t["pos"][0] for t in tiles)
+                min_ty = min(t["pos"][1] for t in tiles)
+                max_tx = max(t["pos"][0] for t in tiles)
+                max_ty = max(t["pos"][1] for t in tiles)
+                self._minimap_bounds = (
+                    min_tx * ts,
+                    min_ty * ts,
+                    (max_tx + 1) * ts,
+                    (max_ty + 1) * ts,
+                )
+            else:
+                self._minimap_bounds = (0, 0, 1, 1)
+        except Exception:
+            self._minimap_bounds = (0, 0, 1, 1)
         # Precompute immutable tile type counts for performance HUD (tiles static during gameplay)
         try:
             self.tilemap._cached_type_counts = self.tilemap._recompute_type_counts()  # type: ignore[attr-defined]

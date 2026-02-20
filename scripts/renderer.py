@@ -189,6 +189,7 @@ class Renderer:
                 UI.render_game_ui_element(game.display_2, f"Black Mist: {mist_ms / 1000:.1f}s", 5, 60)
             else:
                 UI.render_game_ui_element(game.display_2, "Black Mist: Hold Dash 2s", 5, 60)
+        self._render_minimap(game)
         UI.render_game_ui_element(game.display_2, f"${game.cm.coins}", 5, 15)
         UI.render_game_ui_element(game.display_2, f"Ammo:  {game.cm.ammo}", 5, 25)
         # Boss health bar (if present on this level)
@@ -214,6 +215,57 @@ class Renderer:
                 self.perf_hud._game_counts = game_counts  # type: ignore[attr-defined]
             except Exception:
                 pass
+
+    def _render_minimap(self, game) -> None:
+        bounds = getattr(game, "_minimap_bounds", None)
+        if not bounds or not getattr(game, "player", None):
+            return
+
+        min_x, min_y, max_x, max_y = bounds
+        span_x = max(1, max_x - min_x)
+        span_y = max(1, max_y - min_y)
+
+        map_w = 140
+        map_h = 88
+        pad = 6
+        panel_x = game.BASE_W - map_w - 8
+        panel_y = 28
+
+        panel = pygame.Surface((map_w, map_h), pygame.SRCALPHA)
+        panel.fill((10, 20, 30, 170))
+        pygame.draw.rect(panel, (180, 210, 240), (0, 0, map_w, map_h), 1)
+
+        def world_to_minimap(wx: float, wy: float) -> tuple[int, int]:
+            nx = (wx - min_x) / span_x
+            ny = (wy - min_y) / span_y
+            mx = int(pad + max(0.0, min(1.0, nx)) * (map_w - 2 * pad))
+            my = int(pad + max(0.0, min(1.0, ny)) * (map_h - 2 * pad))
+            return mx, my
+
+        # Flag marker(s)
+        for f in getattr(game, "flags", []):
+            fx, fy = world_to_minimap(f.centerx, f.centery)
+            pygame.draw.circle(panel, (255, 225, 90), (fx, fy), 3)
+
+        # Player marker
+        p = game.player.rect().center
+        px, py = world_to_minimap(p[0], p[1])
+        pygame.draw.circle(panel, (80, 240, 255), (px, py), 3)
+        pygame.draw.circle(panel, (20, 20, 20), (px, py), 4, 1)
+
+        # Camera viewport outline for orientation.
+        view_w = getattr(game.display, "get_width", lambda: 1)()
+        view_h = getattr(game.display, "get_height", lambda: 1)()
+        sx, sy = getattr(game, "scroll", [0, 0])
+        x0, y0 = world_to_minimap(sx, sy)
+        x1, y1 = world_to_minimap(sx + view_w, sy + view_h)
+        vx = min(x0, x1)
+        vy = min(y0, y1)
+        vw = max(2, abs(x1 - x0))
+        vh = max(2, abs(y1 - y0))
+        pygame.draw.rect(panel, (120, 120, 140), (vx, vy, vw, vh), 1)
+
+        game.display_2.blit(panel, (panel_x, panel_y))
 
 
 __all__ = ["Renderer"]

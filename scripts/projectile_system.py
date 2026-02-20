@@ -127,10 +127,19 @@ class ProjectileSystem:
                                 pass
                         break
             else:  # enemy owned
-                # Player damage (skip if heavily dashing similar to old logic)
+                # Player damage / dash bullet-cut behavior.
                 rect = pygame.Rect(proj["pos"][0], proj["pos"][1], 4, 4)
                 for player in players:
-                    if abs(player.dashing) < DASH_MIN_ACTIVE_ABS and player.rect().colliderect(rect):
+                    if not player.rect().colliderect(rect):
+                        continue
+                    # During any dash, player cuts through bullets (no damage).
+                    if abs(player.dashing) > 0:
+                        if proj in self._projectiles:
+                            self._projectiles.remove(proj)
+                            spawn_projectile_sparks(self.game, proj["pos"], proj["vel"][0])
+                            removed += 1
+                        break
+                    if abs(player.dashing) < DASH_MIN_ACTIVE_ABS:
                         if proj in self._projectiles:
                             self._projectiles.remove(proj)
                             if hasattr(player, "take_damage"):

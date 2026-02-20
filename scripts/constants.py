@@ -14,9 +14,9 @@ WALL_JUMP_HORIZONTAL_VEL = 3.5  # horizontal push from wall jump
 WALL_JUMP_VERTICAL_VEL = -2.5  # vertical component of wall jump
 
 # Dash
-DASH_DURATION_FRAMES = 60  # total dash frames magnitude (positive or negative)
-DASH_DECEL_TRIGGER_FRAME = 51  # frame at which abrupt slow-down occurs
-DASH_MIN_ACTIVE_ABS = 50  # absolute value threshold to consider in dash effects
+DASH_DURATION_FRAMES = 40  # total dash frames magnitude (positive or negative)
+DASH_DECEL_TRIGGER_FRAME = 31  # frame at which abrupt slow-down occurs
+DASH_MIN_ACTIVE_ABS = 30  # absolute value threshold to consider in dash effects
 DASH_SPEED = 8  # horizontal speed during primary dash frames
 DASH_TRAIL_PARTICLE_SPEED = 3  # particle horizontal speed factor
 

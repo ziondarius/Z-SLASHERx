@@ -1066,7 +1066,7 @@ class OptionsState(State):
         self.bg = pygame.image.load("data/images/background-big.png")
         self._ui = UI
         self.settings = settings
-        self.widget = ScrollableListWidget([], visible_rows=6, spacing=50, font_size=30)
+        self.widget = ScrollableListWidget([], visible_rows=7, spacing=50, font_size=30)
         self.request_back = False
         self.enter = False
         self.message = ""
@@ -1093,6 +1093,14 @@ class OptionsState(State):
                     get_progress_tracker().reset_progress()
                     self.settings.selected_level = 0
                     self.message = self.loc.translate("options.progress_reset")
+                elif idx == 5:
+                    try:
+                        from scripts.timer import Timer
+
+                        Timer(self.settings.selected_level).reset_best_times()
+                        self.message = self.loc.translate("options.records_reset")
+                    except Exception:
+                        self.message = self.loc.translate("options.records_reset")
             elif a == "options_left" or a == "options_right":
                 # Cycle or toggle
                 idx = self.widget.selected_index
@@ -1109,7 +1117,7 @@ class OptionsState(State):
                     # Toggle mode
                     current = self.settings.ghost_mode
                     self.settings.ghost_mode = "last" if current == "best" else "best"
-                elif idx == 5:
+                elif idx == 6:
                     self.settings.fullscreen = not self.settings.fullscreen
                     self._apply_fullscreen()
 
@@ -1124,6 +1132,7 @@ class OptionsState(State):
             self.loc.translate("options.ghosts", ghosts_status),
             self.loc.translate("options.ghost_mode", self.settings.ghost_mode.upper()),
             self.loc.translate("options.reset_progress"),
+            self.loc.translate("options.reset_records"),
             f"Fullscreen: {'ON' if self.settings.fullscreen else 'OFF'}",
         ]
 

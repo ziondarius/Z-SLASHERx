@@ -38,6 +38,8 @@
         "options.off": "OFF",
         "options.reset_progress": "Reset Progress",
         "options.progress_reset": "Progress reset to Level 0",
+        "options.reset_records": "Reset Records",
+        "options.records_reset": "Best-time records cleared",
         "level_complete.title": "Level Complete!",
         "level_complete.time": "Time: {}",
         "level_complete.new_best": "NEW BEST RECORD!",

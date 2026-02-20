@@ -189,6 +189,9 @@ class Renderer:
                 UI.render_game_ui_element(game.display_2, f"Black Mist: {mist_ms / 1000:.1f}s", 5, 60)
             else:
                 UI.render_game_ui_element(game.display_2, "Black Mist: Hold Dash 2s", 5, 60)
+            gold_ms = max(0, int(getattr(game.player, "golden_apple_until", 0)) - now)
+            if gold_ms > 0:
+                UI.render_game_ui_element(game.display_2, f"Golden Apple: {gold_ms / 1000:.1f}s", 5, 70)
         self._render_minimap(game)
         UI.render_game_ui_element(game.display_2, f"${game.cm.coins}", 5, 15)
         UI.render_game_ui_element(game.display_2, f"Ammo:  {game.cm.ammo}", 5, 25)
@@ -245,12 +248,21 @@ class Renderer:
         # Flag marker(s)
         for f in getattr(game, "flags", []):
             fx, fy = world_to_minimap(f.centerx, f.centery)
-            pygame.draw.circle(panel, (255, 225, 90), (fx, fy), 3)
+            pygame.draw.circle(panel, (235, 60, 60), (fx, fy), 3)
+
+        # Best-record ghost marker (yellow), when available.
+        replay_mgr = getattr(game, "replay", None)
+        ghost = getattr(replay_mgr, "ghost", None) if replay_mgr else None
+        ghost_entity = getattr(ghost, "entity", None) if ghost else None
+        ghost_pos = getattr(ghost_entity, "pos", None) if ghost_entity else None
+        if ghost_pos is not None and len(ghost_pos) >= 2:
+            gx, gy = world_to_minimap(float(ghost_pos[0]), float(ghost_pos[1]))
+            pygame.draw.circle(panel, (255, 230, 70), (gx, gy), 3)
 
         # Player marker
         p = game.player.rect().center
         px, py = world_to_minimap(p[0], p[1])
-        pygame.draw.circle(panel, (80, 240, 255), (px, py), 3)
+        pygame.draw.circle(panel, (60, 150, 255), (px, py), 3)
         pygame.draw.circle(panel, (20, 20, 20), (px, py), 4, 1)
 
         # Camera viewport outline for orientation.

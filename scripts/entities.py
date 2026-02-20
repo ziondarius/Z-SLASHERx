@@ -336,6 +336,7 @@ class Player(PhysicsEntity):
         self.shadow_form_active = False
         self.shadow_form_max_ms = 5000
         self.shadow_form_ms = self.shadow_form_max_ms
+        self.golden_apple_until = 0
         self._shadow_requested = False
         self._shadow_particle_tick = 0
         self.shadow_particles: list[dict[str, float | int | list[float]]] = []
@@ -399,11 +400,32 @@ class Player(PhysicsEntity):
             self.shadow_form_ms = self.shadow_form_max_ms
 
     def update(self, tilemap, movement=(0, 0)):
+        now = pygame.time.get_ticks()
         # Fade existing shadow particles.
         for p in self.shadow_particles[:]:
             p["ttl"] -= 1
             if p["ttl"] <= 0:
                 self.shadow_particles.remove(p)
+        # Golden apple power: fly + phase through walls.
+        if now < self.golden_apple_until:
+            keys = pygame.key.get_pressed()
+            ix = int(keys[pygame.K_RIGHT] or keys[pygame.K_d]) - int(keys[pygame.K_LEFT] or keys[pygame.K_a])
+            iy = int(keys[pygame.K_DOWN] or keys[pygame.K_s]) - int(keys[pygame.K_UP] or keys[pygame.K_w])
+            fly_speed = 4.8
+            if ix != 0 and iy != 0:
+                step_x = ix * fly_speed * 0.7071
+                step_y = iy * fly_speed * 0.7071
+            else:
+                step_x = ix * fly_speed
+                step_y = iy * fly_speed
+            self.pos[0] += step_x
+            self.pos[1] += step_y
+            self.velocity = [0, 0]
+            self.air_time = 0
+            self.jumps = 2
+            self.wall_slide = False
+            self.set_action("idle")
+            return
         if self._shadow_requested and self.shadow_form_ms > 0:
             self.shadow_form_active = True
         if self.shadow_form_active:

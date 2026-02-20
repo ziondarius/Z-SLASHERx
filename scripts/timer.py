@@ -79,3 +79,10 @@ class Timer:
     def save_best_times(self):
         with open(BEST_TIMES_FILE, "w") as file:
             json.dump(self.best_times, file, indent=4, sort_keys=True)
+
+    def reset_best_times(self):
+        """Clear all saved best-time records."""
+        self.best_times = {}
+        self.best_time = float("inf")
+        self.best_time_text = "--:--:--"
+        self.save_best_times()

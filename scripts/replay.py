@@ -8,6 +8,7 @@ minimize correction drift/teleporting.
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -59,6 +60,7 @@ class ReplayData:
     skin: str
     seed: int
     duration_frames: int
+    map_sig: str = ""
     inputs: List[Dict[str, Any]] = field(default_factory=list)  # [{"tick": N, "inputs": ["left", ...]}, ...]
     snapshots: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # tick -> serialized snapshot
 
@@ -71,6 +73,7 @@ class ReplayData:
             "level": self.level,
             "skin": self.skin,
             "seed": self.seed,
+            "map_sig": self.map_sig,
             "duration_frames": self.duration_frames,
             "inputs": self.inputs,
             "snapshots": self.snapshots,
@@ -82,6 +85,7 @@ class ReplayData:
             level=str(data.get("level", "0")),
             skin=str(data.get("skin", "default")),
             seed=int(data.get("seed", 0)),
+            map_sig=str(data.get("map_sig", "")),
             duration_frames=int(data.get("duration_frames", 0)),
             inputs=data.get("inputs", []),
             snapshots=data.get("snapshots", {}),
@@ -92,8 +96,8 @@ class ReplayData:
 class ReplayRecording:
     """Active recording session."""
 
-    def __init__(self, level: str, skin: str, seed: int):
-        self.data = ReplayData(level=level, skin=skin, seed=seed, duration_frames=0)
+    def __init__(self, level: str, skin: str, seed: int, map_sig: str):
+        self.data = ReplayData(level=level, skin=skin, seed=seed, map_sig=map_sig, duration_frames=0)
 
     def capture_frame(
         self, tick: int, player: Any, inputs: List[str], snapshot: Optional[Any] = None, optimized: bool = True
@@ -297,6 +301,7 @@ class ReplayManager:
 
     def on_level_load(self, level: int | str, player: Any):
         level_str = str(level)
+        current_map_sig = self._map_signature()
         seed = 0
         try:
             pass
@@ -308,7 +313,7 @@ class ReplayManager:
         skin = self._get_skin(player)
 
         if self._ghosts_enabled():
-            self.recording = ReplayRecording(level_str, skin, seed)
+            self.recording = ReplayRecording(level_str, skin, seed, current_map_sig)
             self.tick_counter = 0
 
             self.best_data = self._load(level_str, "best")
@@ -319,14 +324,14 @@ class ReplayManager:
 
             # Prioritize based on mode
             if mode == "best":
-                if self.best_data and self.best_data.level == level_str:
+                if self.best_data and self.best_data.level == level_str and self.best_data.map_sig == current_map_sig:
                     source = self.best_data
-                elif self.last_data and self.last_data.level == level_str:
+                elif self.last_data and self.last_data.level == level_str and self.last_data.map_sig == current_map_sig:
                     source = self.last_data
             else:  # mode == "last"
-                if self.last_data and self.last_data.level == level_str:
+                if self.last_data and self.last_data.level == level_str and self.last_data.map_sig == current_map_sig:
                     source = self.last_data
-                elif self.best_data and self.best_data.level == level_str:
+                elif self.best_data and self.best_data.level == level_str and self.best_data.map_sig == current_map_sig:
                     source = self.best_data
 
             if source:
@@ -384,6 +389,14 @@ class ReplayManager:
 
     def _path(self, level: str, kind: str) -> Path:
         return (self.storage_dir if kind == "best" else self.last_runs_dir) / f"{level}.json"
+
+    def _map_signature(self) -> str:
+        """Stable signature of current tilemap layout to invalidate stale ghosts."""
+        try:
+            payload = json.dumps(self.game.tilemap.tilemap, sort_keys=True, separators=(",", ":"))
+            return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+        except Exception:
+            return ""
 
     def _ghosts_enabled(self) -> bool:
         return bool(getattr(global_settings, "ghost_enabled", True))

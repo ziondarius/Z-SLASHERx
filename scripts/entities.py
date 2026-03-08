@@ -365,6 +365,18 @@ class Player(PhysicsEntity):
             "dash_tint": (20, 20, 20),
         }
 
+    def set_skin(self, skin_index: int) -> None:
+        """Assign skin and immediately refresh current animation."""
+        try:
+            max_idx = max(0, len(cm.SKIN_PATHS) - 1)
+            self.skin = max(0, min(int(skin_index), max_idx))
+        except Exception:
+            self.skin = 0
+        current_action = self.action or "idle"
+        # Force animation swap even if action label stays the same.
+        self.action = ""
+        self.set_action(current_action)
+
     # --- New canonical attribute ---
     @property
     def lives(self):  # noqa: D401 simple property

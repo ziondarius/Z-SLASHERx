@@ -252,7 +252,7 @@ class Game:
                         lives=lives,
                         respawn_pos=list(spawner["pos"]),
                     )
-                    player.skin = skin
+                    player.set_skin(skin)
                     player.air_time = 0
                     if hasattr(player, "health_max"):
                         player.health = player.health_max

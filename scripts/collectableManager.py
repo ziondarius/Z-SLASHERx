@@ -18,6 +18,38 @@ HEART_RESPAWN_MS = 8000
 HEART_HEAL_AMOUNT = 40
 
 
+def _discover_skin_paths() -> List[str]:
+    base_dir = "data/images/entities/player"
+    discovered: List[str] = []
+    if os.path.isdir(base_dir):
+        for name in os.listdir(base_dir):
+            full = os.path.join(base_dir, name)
+            if not os.path.isdir(full):
+                continue
+            if os.path.isdir(os.path.join(full, "idle")):
+                discovered.append(name)
+    if not discovered:
+        return ["default", "red"]
+    discovered = sorted(set(discovered))
+    if "default" in discovered:
+        discovered.remove("default")
+        discovered.insert(0, "default")
+    return discovered
+
+
+def _skin_label(path_name: str) -> str:
+    fixed = {
+        "default": "Default",
+        "red": "Red Ninja",
+        "gold": "Gold Ninja",
+        "platinum": "Platinum Ninja",
+        "diamond": "Diamond Ninja",
+        "assassin": "Assassin",
+        "berserker": "Berserker",
+    }
+    return fixed.get(path_name, path_name.replace("_", " ").title())
+
+
 @dataclass(frozen=True)
 class ItemDef:
     name: str
@@ -49,24 +81,8 @@ class CollectableManager:
 
     NOT_PURCHASEABLES: set[str] = set()
 
-    SKINS = [
-        "Default",
-        "Red Ninja",
-        "Gold Ninja",
-        "Platinum Ninja",
-        "Diamond Ninja",
-        "Assassin",
-        "Berserker",
-    ]
-    SKIN_PATHS = [
-        "default",
-        "red",
-        "gold",
-        "platinum",
-        "diamond",
-        "assassin",
-        "berserker",
-    ]
+    SKIN_PATHS = _discover_skin_paths()
+    SKINS = [_skin_label(path) for path in SKIN_PATHS]
 
     WEAPONS = [
         "Default",

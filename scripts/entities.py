@@ -347,6 +347,24 @@ class Player(PhysicsEntity):
         self.shoot_cooldown = 10
         self.move_speed = 2.2
 
+    def _effect_colors(self):
+        skin_path = "default"
+        try:
+            skin_path = cm.SKIN_PATHS[self.skin]
+        except Exception:
+            pass
+        if skin_path == "red":
+            return {
+                "mist_particle": (170, 35, 35),
+                "mist_body": (190, 40, 40),
+                "dash_tint": (210, 45, 45),
+            }
+        return {
+            "mist_particle": (15, 15, 15),
+            "mist_body": (20, 20, 20),
+            "dash_tint": (20, 20, 20),
+        }
+
     # --- New canonical attribute ---
     @property
     def lives(self):  # noqa: D401 simple property
@@ -446,6 +464,7 @@ class Player(PhysicsEntity):
                         ],
                         "r": rng.randint(2, 4),
                         "ttl": 16,
+                        "color": self._effect_colors()["mist_particle"],
                     }
                 )
             return
@@ -493,6 +512,7 @@ class Player(PhysicsEntity):
                 self.set_action("idle")
 
         if abs(self.dashing) in {DASH_DURATION_FRAMES, DASH_MIN_ACTIVE_ABS}:
+            dash_tint = self._effect_colors()["dash_tint"]
             for i in range(20):
                 angle = rng.random() * math.pi * 2
                 speed = rng.random() * 0.5 + 0.5
@@ -504,6 +524,7 @@ class Player(PhysicsEntity):
                         self.rect().center,
                         velocity=pvelocity,
                         frame=rng.randint(0, 7),
+                        tint=dash_tint,
                     )
                 )
         if self.dashing > 0:
@@ -511,6 +532,7 @@ class Player(PhysicsEntity):
         if self.dashing < 0:
             self.dashing = min(0, self.dashing + 1)
         if abs(self.dashing) > DASH_MIN_ACTIVE_ABS:
+            dash_tint = self._effect_colors()["dash_tint"]
             self.velocity[0] = abs(self.dashing) / self.dashing * DASH_SPEED
             if abs(self.dashing) == DASH_DECEL_TRIGGER_FRAME:
                 self.velocity[0] *= 0.1
@@ -525,6 +547,7 @@ class Player(PhysicsEntity):
                     self.rect().center,
                     velocity=pvelocity,
                     frame=rng.randint(0, 7),
+                    tint=dash_tint,
                 )
             )
 
@@ -534,10 +557,11 @@ class Player(PhysicsEntity):
             self.velocity[0] = min(self.velocity[0] + HORIZONTAL_FRICTION, 0)
 
     def render(self, surf, offset=(0, 0)):
+        colors = self._effect_colors()
         for p in self.shadow_particles:
             pygame.draw.circle(
                 surf,
-                (15, 15, 15),
+                p.get("color", colors["mist_particle"]),
                 (int(p["pos"][0] - offset[0]), int(p["pos"][1] - offset[1])),
                 int(p["r"]),
             )
@@ -545,7 +569,7 @@ class Player(PhysicsEntity):
             # Shadow form visualization: dark orb body.
             pygame.draw.circle(
                 surf,
-                (20, 20, 20),
+                colors["mist_body"],
                 (int(self.rect().centerx - offset[0]), int(self.rect().centery - offset[1])),
                 7,
             )

@@ -16,7 +16,6 @@ class Settings:
         self._sound_volume = 0.0
         self._selected_level = 0
         self.selected_editor_level = 0
-        self.custom_levels = []
         self.selected_weapon = 0
         self.selected_skin = 0
         self.show_perf_overlay = True
@@ -147,21 +146,6 @@ class Settings:
     def get_selected_editor_level(self):
         return self.selected_editor_level
 
-    def add_custom_level(self, level):
-        lvl = int(level)
-        if lvl not in self.custom_levels:
-            self.custom_levels.append(lvl)
-            self.custom_levels.sort()
-            self._dirty = True
-            self.flush()
-
-    def remove_custom_level(self, level):
-        lvl = int(level)
-        if lvl in self.custom_levels:
-            self.custom_levels.remove(lvl)
-            self._dirty = True
-            self.flush()
-
     def set_level_to_playable(self, level):
         """Legacy API used by older code paths to unlock a level.
 
@@ -220,9 +204,6 @@ class Settings:
                     self._sound_volume = data.get("sound_volume", self._sound_volume)
                     self._selected_level = data.get("selected_level", self._selected_level)
                     self.selected_editor_level = data.get("selected_editor_level", self.selected_editor_level)
-                    raw_custom = data.get("custom_levels", self.custom_levels)
-                    if isinstance(raw_custom, list):
-                        self.custom_levels = sorted({int(v) for v in raw_custom if str(v).isdigit()})
                     self.selected_weapon = data.get("selected_weapon", self.selected_weapon)
                     self.selected_skin = data.get("selected_skin", self.selected_skin)
                     self.show_perf_overlay = data.get("show_perf_overlay", self.show_perf_overlay)
@@ -261,7 +242,6 @@ class Settings:
             "sound_volume": self._sound_volume,
             "selected_level": self._selected_level,
             "selected_editor_level": self.selected_editor_level,
-            "custom_levels": self.custom_levels,
             "selected_skin": self.selected_skin,
             "selected_weapon": self.selected_weapon,
             "playable_levels": {str(k): v for k, v in self.playable_levels.items()},

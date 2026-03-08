@@ -90,16 +90,6 @@ class Game:
             "clouds": am.get_image_frames("clouds"),
             "enemy/idle": am.get_animation("entities/enemy/idle", img_dur=6),
             "enemy/run": am.get_animation("entities/enemy/run", img_dur=4),
-            "player/default/idle": am.get_animation("entities/player/default/idle", img_dur=6),
-            "player/default/run": am.get_animation("entities/player/default/run", img_dur=4),
-            "player/default/jump": am.get_animation("entities/player/default/jump"),
-            "player/default/slide": am.get_animation("entities/player/default/slide"),
-            "player/default/wall_slide": am.get_animation("entities/player/default/wall_slide"),
-            "player/red/idle": am.get_animation("entities/player/red/idle", img_dur=6),
-            "player/red/run": am.get_animation("entities/player/red/run", img_dur=4),
-            "player/red/jump": am.get_animation("entities/player/red/jump"),
-            "player/red/slide": am.get_animation("entities/player/red/slide"),
-            "player/red/wall_slide": am.get_animation("entities/player/red/wall_slide"),
             "particle/leaf": am.get_animation("particles/leaf", img_dur=20, loop=False),
             "particle/particle": am.get_animation("particles/particle", img_dur=6, loop=False),
             "coin": am.get_animation("collectables/coin", img_dur=6),
@@ -108,6 +98,22 @@ class Game:
             "gun": am.get_image("gun.png"),
             "projectile": am.get_image("projectile.png"),
         }
+        # Load animations for all discovered player skins.
+        for skin_path in CollectableManager.SKIN_PATHS:
+            for action, kwargs in (
+                ("idle", {"img_dur": 6}),
+                ("run", {"img_dur": 4}),
+                ("jump", {}),
+                ("slide", {}),
+                ("wall_slide", {}),
+            ):
+                key = f"player/{skin_path}/{action}"
+                try:
+                    self.assets[key] = am.get_animation(f"entities/player/{skin_path}/{action}", **kwargs)
+                except Exception:
+                    fallback_key = f"player/default/{action}"
+                    if fallback_key in self.assets:
+                        self.assets[key] = self.assets[fallback_key]
 
         # Audio service replaces direct sound dict (Issue 16)
         self.audio = AudioService.get()

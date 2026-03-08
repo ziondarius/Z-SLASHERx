@@ -98,6 +98,7 @@ class InputRouter:
                 "GameState": game_rules,
                 "PauseState": pause_rules,
                 "LevelsState": menu_rules,
+                "CustomLevelsState": menu_rules,
                 "StoreState": menu_rules,
                 "AccessoriesState": menu_rules,
                 "OptionsState": menu_rules,

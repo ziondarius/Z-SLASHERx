@@ -8,12 +8,17 @@ pause request which results in a PauseState being pushed.
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 
 import pygame
 
 from scripts.input_router import InputRouter
+from scripts.level_cache import invalidate_level_cache, list_levels
+from scripts.progress_tracker import get_progress_tracker
 from scripts.settings import settings
 from scripts.state_manager import (
+    CustomLevelsState,
     GameState,
     LevelsState,
     MenuState,
@@ -21,6 +26,23 @@ from scripts.state_manager import (
     PauseState,
     StateManager,
 )
+
+
+def _next_custom_level_id() -> int:
+    levels = list_levels()
+    return (max(levels) + 1) if levels else 0
+
+
+def _open_level_editor(map_id: int) -> None:
+    subprocess.run([sys.executable, "editor.py", "--map-id", str(map_id)], check=False)
+    invalidate_level_cache()
+    tracker = get_progress_tracker()
+    if map_id not in tracker.levels:
+        tracker.levels.append(map_id)
+        tracker.levels.sort()
+    tracker.unlock(map_id)
+    settings.add_custom_level(map_id)
+    settings.selected_level = map_id
 
 
 def main():
@@ -65,11 +87,16 @@ def main():
                 cur.next_state = None
                 if nxt == "Levels":
                     sm.set(LevelsState())
+                elif nxt == "CustomLevels":
+                    sm.set(CustomLevelsState())
                 elif nxt == "Options":
                     sm.set(OptionsState())
+                elif nxt == "CreateLevel":
+                    _open_level_editor(_next_custom_level_id())
+                    sm.set(MenuState())
                 cur = sm.current
         # Generic back handling for submenu states
-        if isinstance(cur, (LevelsState, OptionsState)):
+        if isinstance(cur, (LevelsState, CustomLevelsState, OptionsState)):
             if getattr(cur, "request_back", False):
                 sm.set(MenuState())
                 cur = sm.current

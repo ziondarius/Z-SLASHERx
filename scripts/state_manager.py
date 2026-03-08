@@ -28,6 +28,9 @@ Design Notes:
 from __future__ import annotations
 
 import math
+import os
+import subprocess
+import sys
 from typing import List, Sequence
 
 import pygame
@@ -166,6 +169,8 @@ class MenuState(State):
         self.options_keys = [
             "menu.play",
             "menu.levels",
+            "menu.create_level",
+            "menu.custom_levels",
             "menu.options",
             "menu.quit",
         ]
@@ -205,6 +210,10 @@ class MenuState(State):
                 self.quit_requested = True
             elif key == "menu.levels":
                 self.next_state = "Levels"
+            elif key == "menu.create_level":
+                self.next_state = "CreateLevel"
+            elif key == "menu.custom_levels":
+                self.next_state = "CustomLevels"
             elif key == "menu.options":
                 self.next_state = "Options"
             # Future: branch to other submenus (Levels/Store/etc.) via state transitions
@@ -765,6 +774,152 @@ class LevelsState(State):
                 surface.get_width() // 2,
                 surface.get_height() - 120,
             )
+
+
+class CustomLevelsState(State):
+    name = "CustomLevelsState"
+
+    def __init__(self) -> None:
+        from scripts.displayManager import DisplayManager
+        from scripts.localization import LocalizationService
+        from scripts.settings import settings
+        from scripts.ui import UI
+
+        self.loc = LocalizationService.get()
+        self.dm = DisplayManager()
+        self.display = pygame.Surface((self.dm.BASE_W, self.dm.BASE_H), pygame.SRCALPHA)
+        self.bg = pygame.image.load("data/images/background-big.png")
+        self._ui = UI
+        self.settings = settings
+        self.widget = ScrollableListWidget([], visible_rows=6, spacing=50, font_size=30)
+        self.request_back = False
+        self.edit_requested = False
+        self.delete_requested = False
+        self.message: str | None = None
+        self.message_timer = 0.0
+        self._refresh_levels()
+
+    def _refresh_levels(self) -> None:
+        existing = []
+        for lvl in sorted(set(self.settings.custom_levels)):
+            if os.path.exists(f"data/maps/{lvl}.json"):
+                existing.append(lvl)
+        if existing != self.settings.custom_levels:
+            self.settings.custom_levels = existing
+            self.settings._dirty = True
+            self.settings.flush()
+        self.custom_levels = existing
+        self.widget.options = [f"Level {lvl:<2}" for lvl in self.custom_levels]
+        if self.widget.selected_index >= len(self.custom_levels):
+            self.widget.selected_index = max(0, len(self.custom_levels) - 1)
+        self._empty = len(self.custom_levels) == 0
+
+    def _current_level(self) -> int | None:
+        if self._empty:
+            return None
+        idx = self.widget.selected_index
+        if idx < 0 or idx >= len(self.custom_levels):
+            return None
+        return self.custom_levels[idx]
+
+    def _open_editor_for_level(self, level: int) -> None:
+        from scripts.level_cache import invalidate_level_cache
+        from scripts.progress_tracker import get_progress_tracker
+
+        subprocess.run([sys.executable, "editor.py", "--map-id", str(level)], check=False)
+        invalidate_level_cache()
+        tracker = get_progress_tracker()
+        if level not in tracker.levels:
+            tracker.levels.append(level)
+            tracker.levels.sort()
+        tracker.unlock(level)
+        self.settings.selected_level = level
+        self.settings.add_custom_level(level)
+        self.message = self.loc.translate("custom_levels.edited", level)
+        self.message_timer = 1.2
+
+    def _delete_level(self, level: int) -> None:
+        from scripts.level_cache import invalidate_level_cache
+        from scripts.progress_tracker import get_progress_tracker
+
+        path = f"data/maps/{level}.json"
+        if os.path.exists(path):
+            os.remove(path)
+        invalidate_level_cache()
+        tracker = get_progress_tracker()
+        tracker.levels = [lvl for lvl in tracker.levels if lvl != level]
+        tracker.unlocked.discard(level)
+        tracker._sync_settings()
+        self.settings.remove_custom_level(level)
+        if self.settings.selected_level == level:
+            self.settings.selected_level = 0
+        self.message = self.loc.translate("custom_levels.deleted", level)
+        self.message_timer = 1.2
+
+    def handle(self, events: Sequence[pygame.event.Event]) -> None:
+        for event in events:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_DELETE:
+                self.delete_requested = True
+
+    def handle_actions(self, actions: Sequence[str]) -> None:
+        for a in actions:
+            if a == "menu_up" and not self._empty:
+                self.widget.move_up()
+            elif a == "menu_down" and not self._empty:
+                self.widget.move_down()
+            elif a == "menu_select" and not self._empty:
+                self.edit_requested = True
+            elif a in ("menu_back", "menu_quit"):
+                self.request_back = True
+
+    def update(self, dt: float) -> None:
+        if self.edit_requested:
+            level = self._current_level()
+            if level is not None:
+                self._open_editor_for_level(level)
+                self._refresh_levels()
+            self.edit_requested = False
+
+        if self.delete_requested:
+            level = self._current_level()
+            if level is not None:
+                self._delete_level(level)
+                self._refresh_levels()
+            self.delete_requested = False
+
+        if self.message_timer > 0:
+            self.message_timer -= dt
+            if self.message_timer <= 0:
+                self.message = None
+
+    def render(self, surface: pygame.Surface) -> None:
+        UI = self._ui
+        UI.render_menu_bg(surface, self.display, self.bg)
+        UI.render_menu_title(surface, self.loc.translate("custom_levels.title"), surface.get_width() // 2, 160)
+        if self._empty:
+            UI.render_menu_msg(
+                surface,
+                self.loc.translate("custom_levels.none"),
+                surface.get_width() // 2,
+                320,
+            )
+        else:
+            self.widget.render(surface, surface.get_width() // 2, 260)
+            UI.render_menu_ui_element(
+                surface,
+                self.loc.translate("custom_levels.edit_hint"),
+                20,
+                surface.get_height() - 70,
+            )
+            UI.render_menu_ui_element(
+                surface,
+                self.loc.translate("custom_levels.delete_hint"),
+                20,
+                surface.get_height() - 50,
+            )
+        UI.render_menu_ui_element(surface, self.loc.translate("menu.back_hint"), 20, surface.get_height() - 30)
+        if self.message:
+            UI.render_menu_msg(surface, self.message, surface.get_width() // 2, surface.get_height() - 110)
 
 
 class StoreState(State):

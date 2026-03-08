@@ -1,4 +1,5 @@
-import sys
+import argparse
+import os
 
 import pygame
 import pygame.font
@@ -9,12 +10,9 @@ from scripts.settings import settings
 from scripts.tilemap import Tilemap
 from scripts.utils import load_image, load_images
 
-MAP_NAME = "20"  # Default target map (may not exist). Will fallback to first available.
-CURRENT_MAP = "data/maps/" + str(MAP_NAME) + ".json"
-
 
 class Editor:
-    def __init__(self):
+    def __init__(self, map_id=None):
         pygame.init()
         dm = DisplayManager()
         self.BASE_W = dm.BASE_W
@@ -47,25 +45,15 @@ class Editor:
 
         self.tilemap = Tilemap(self, tile_size=16)
 
-        # Attempt to load requested map; if not present, fallback to first available.
-        import os
+        if map_id is None:
+            map_id = settings.get_selected_editor_level()
+        self.map_id = max(0, int(map_id))
+        self.current_map = f"data/maps/{self.map_id}.json"
 
-        if os.path.exists(CURRENT_MAP):
-            self.tilemap.load(CURRENT_MAP, load_entities=False)
-        else:
-            map_dir = "data/maps"
-            try:
-                candidates = [f for f in os.listdir(map_dir) if f.endswith(".json")]
-            except FileNotFoundError:
-                candidates = []
-            numeric = [int(f.split(".")[0]) for f in candidates if f.split(".")[0].isdigit()]
-            if numeric:
-                numeric.sort()
-                fallback = numeric[0]
-                fallback_path = f"{map_dir}/{fallback}.json"
-                self.tilemap.load(fallback_path, load_entities=False)
-                settings.set_editor_level(int(fallback))
-            # else: start with empty tilemap (new map creation scenario)
+        # Load requested map if it exists; otherwise start a new empty map.
+        if os.path.exists(self.current_map):
+            self.tilemap.load(self.current_map, load_entities=False)
+        self.tilemap.level = self.map_id
 
         self.scroll = [0, 0]
 
@@ -84,7 +72,7 @@ class Editor:
         self.m_offset = self.multi_tile_size // 2
 
         settings.load_settings()
-        settings.set_editor_level(int(MAP_NAME))
+        settings.set_editor_level(self.map_id)
         settings.save_settings()
 
         self.font = pygame.font.Font(None, 10)
@@ -309,8 +297,7 @@ class Editor:
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
+                    return
 
                 # Object placement
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -374,7 +361,7 @@ class Editor:
                     if event.key == pygame.K_LSHIFT:
                         self.shift = True
                     if event.key == pygame.K_o:
-                        self.tilemap.save(CURRENT_MAP)
+                        self.tilemap.save(self.current_map)
                     if event.key == pygame.K_t:
                         self.tilemap.autotile()
                     if event.key == pygame.K_m:
@@ -383,9 +370,8 @@ class Editor:
                         self.space = True
 
                     if event.key == pygame.K_ESCAPE:
-                        self.tilemap.save(CURRENT_MAP)
-                        pygame.quit()
-                        sys.exit()
+                        self.tilemap.save(self.current_map)
+                        return
 
                 if event.type == pygame.KEYUP:
                     if event.key == pygame.K_a:
@@ -434,7 +420,22 @@ class Editor:
                 frame_counter += 1
                 if frame_counter >= max_frames:
                     # Auto-exit for test harness usage
-                    break
+                    return
 
 
-Editor().run()
+def _parse_args():
+    parser = argparse.ArgumentParser(description="Z-Slasher level editor")
+    parser.add_argument("--map-id", type=int, default=None, help="Map id to edit/create in data/maps")
+    return parser.parse_args()
+
+
+def main():
+    args = _parse_args()
+    editor = Editor(map_id=args.map_id)
+    editor.run()
+    pygame.quit()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

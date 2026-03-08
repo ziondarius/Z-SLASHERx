@@ -369,19 +369,8 @@ class UI:
             pygame.draw.rect(game.display, (250, 170, 60), rr, 1)
 
         # Display sillhouette
-        dash_outline = (0, 0, 0, 180)
-        player = getattr(game, "player", None)
-        if player is not None and abs(getattr(player, "dashing", 0)) > 0:
-            try:
-                from scripts.collectableManager import CollectableManager as cm
-
-                skin_path = cm.SKIN_PATHS[getattr(player, "skin", 0)]
-                if skin_path == "red":
-                    dash_outline = (200, 45, 45, 180)
-            except Exception:
-                pass
         display_mask = pygame.mask.from_surface(game.display)
-        display_sillhouette = display_mask.to_surface(setcolor=dash_outline, unsetcolor=(0, 0, 0, 0))
+        display_sillhouette = display_mask.to_surface(setcolor=(0, 0, 0, 180), unsetcolor=(0, 0, 0, 0))
         for offset_o in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             game.display_2.blit(display_sillhouette, offset_o)
 

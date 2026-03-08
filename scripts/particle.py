@@ -26,8 +26,8 @@ class Particle:
     def render(self, surf, offset=(0, 0)):
         img = self.animation.img()
         if self.tint is not None:
-            img = img.copy()
-            img.fill((*self.tint, 255), special_flags=pygame.BLEND_RGBA_MULT)
+            mask = pygame.mask.from_surface(img)
+            img = mask.to_surface(setcolor=(*self.tint, 220), unsetcolor=(0, 0, 0, 0))
         surf.blit(
             img,
             (

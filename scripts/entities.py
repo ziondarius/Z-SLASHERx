@@ -359,6 +359,12 @@ class Player(PhysicsEntity):
                 "mist_body": (190, 40, 40),
                 "dash_tint": (210, 45, 45),
             }
+        if skin_path == "golden":
+            return {
+                "mist_particle": (255, 235, 90),
+                "mist_body": (255, 220, 40),
+                "dash_tint": (255, 230, 70),
+            }
         return {
             "mist_particle": (15, 15, 15),
             "mist_body": (20, 20, 20),

@@ -42,6 +42,7 @@ def _skin_label(path_name: str) -> str:
         "default": "Default",
         "red": "Red Ninja",
         "gold": "Gold Ninja",
+        "golden": "Golden Ninja",
         "platinum": "Platinum Ninja",
         "diamond": "Diamond Ninja",
         "assassin": "Assassin",

@@ -23,20 +23,7 @@ class Settings:
         self._ghost_enabled = True
         self._ghost_mode = "best"  # "best" or "last"
         self._dirty = False
-        self.playable_levels = {
-            0: True,
-            1: False,
-            2: False,
-            3: False,
-            4: False,
-            5: False,
-            6: False,
-            7: False,
-            8: False,
-            9: False,
-            10: False,
-            15: False,
-        }
+        self.playable_levels = {0: True}
         # Default key bindings (using pygame key integers for backend simplicity)
 
         self.key_bindings = {
@@ -211,8 +198,18 @@ class Settings:
                     self._ghost_enabled = bool(data.get("ghost_enabled", self._ghost_enabled))
                     self._ghost_mode = str(data.get("ghost_mode", self._ghost_mode))
                     playable_levels = data.get("playable_levels", {})
-                    for level in self.playable_levels:
-                        self.playable_levels[level] = playable_levels.get(str(level), self.playable_levels[level])
+                    if isinstance(playable_levels, dict):
+                        loaded_levels = {}
+                        for key, unlocked in playable_levels.items():
+                            try:
+                                lvl = int(key)
+                            except (TypeError, ValueError):
+                                continue
+                            loaded_levels[lvl] = bool(unlocked)
+                        if loaded_levels:
+                            self.playable_levels = loaded_levels
+                    if 0 not in self.playable_levels:
+                        self.playable_levels[0] = True
 
                     # Merge loaded bindings with defaults (deep merge to preserve defaults for missing keys)
                     loaded_bindings = data.get("key_bindings", {})

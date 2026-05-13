@@ -132,6 +132,13 @@ class ProjectileSystem:
                 for player in players:
                     if not player.rect().colliderect(rect):
                         continue
+                    # Slide ability grants bullet immunity only while active.
+                    if getattr(player, "slide_ability_active", False):
+                        if proj in self._projectiles:
+                            self._projectiles.remove(proj)
+                            spawn_projectile_sparks(self.game, proj["pos"], proj["vel"][0])
+                            removed += 1
+                        break
                     # During any dash, player cuts through bullets (no damage).
                     if abs(player.dashing) > 0:
                         if proj in self._projectiles:

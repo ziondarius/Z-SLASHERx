@@ -70,6 +70,7 @@ class ProgressTracker:
         # Update settings.playable_levels to reflect current unlocked
         settings.playable_levels = {lvl: (lvl in self.unlocked) for lvl in self.levels}
         settings._dirty = True  # mark for persistence
+        settings.flush()
 
     # API ---------------------------------------------------------
     def is_unlocked(self, level: int) -> bool:

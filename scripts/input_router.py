@@ -43,6 +43,32 @@ def _mouse_button_rule(button: int, action: Action, event_type=pygame.MOUSEBUTTO
     return _r
 
 
+def _joy_button_rule(buttons: set[int], action: Action, event_type=pygame.JOYBUTTONDOWN) -> Rule:
+    def _r(e: pygame.event.Event):  # type: ignore[override]
+        if e.type == event_type and getattr(e, "button", None) in buttons:
+            return action
+        return None
+
+    return _r
+
+
+def _joy_hat_rule(action_up: Action, action_down: Action) -> Rule:
+    def _r(e: pygame.event.Event):  # type: ignore[override]
+        if e.type != pygame.JOYHATMOTION:
+            return None
+        val = getattr(e, "value", None)
+        if not isinstance(val, tuple) or len(val) < 2:
+            return None
+        y = val[1]
+        if y > 0:
+            return action_up
+        if y < 0:
+            return action_down
+        return None
+
+    return _r
+
+
 class InputRouter:
     """Maps pygame events to semantic actions for the active state."""
 
@@ -67,6 +93,13 @@ class InputRouter:
             menu_rules.extend(bind(keys, act))
         # Add mouse rule manually (not in settings yet?)
         menu_rules.append(_mouse_button_rule(1, "menu_select"))
+        # Controller menu mapping:
+        # - D-pad up/down => navigate
+        # - B => select
+        # - X => back
+        menu_rules.append(_joy_hat_rule("menu_up", "menu_down"))
+        menu_rules.append(_joy_button_rule({1}, "menu_select"))
+        menu_rules.append(_joy_button_rule({2}, "menu_back"))
 
         # GameState (complex)
         game_binds = settings.key_bindings.get("GameState", {})

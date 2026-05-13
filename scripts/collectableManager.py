@@ -41,6 +41,7 @@ def _skin_label(path_name: str) -> str:
     fixed = {
         "default": "Default",
         "red": "Red Ninja",
+        "archer": "Archer Ninja",
         "gold": "Gold Ninja",
         "golden": "Golden Ninja",
         "platinum": "Platinum Ninja",
@@ -371,6 +372,9 @@ class CollectableManager:
             return 1
         idef = self.get_item_def(item)
         if not idef:
+            # Treat discovered sprite-only skins as available by default.
+            if item in self.SKINS:
+                return 1
             return 0
         return int(getattr(self, idef.attr, 0))
 

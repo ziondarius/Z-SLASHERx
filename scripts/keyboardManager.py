@@ -19,8 +19,6 @@ class KeyboardManager:
         self._jump_buttons = {0}
         # Controller slide ability on B only.
         self._ability_buttons = {1}
-        # Controller Y behaves like keyboard X action (shoot).
-        self._shoot_buttons = {3}
         # Hover hold buttons (LB / RB), broad but isolated from dash inputs.
         self._hover_buttons = {4, 5, 6, 9, 10, 13, 14}
         # Dash trigger buttons (LT / RT) when exposed as digital buttons.
@@ -157,8 +155,6 @@ class KeyboardManager:
                 if event.key == pygame.K_UP:
                     if self.game.player.jump():
                         self.game.audio.play("jump")
-                if event.key == pygame.K_x:
-                    self.game.player.shoot()
                 if event.key in (pygame.K_s, pygame.K_DOWN):
                     self._kbd_slide_held = True
                 if event.key == pygame.K_r:
@@ -185,8 +181,6 @@ class KeyboardManager:
                         self.game.audio.play("jump")
                 if getattr(event, "button", None) in self._dash_trigger_buttons:
                     self.game.player.dash()
-                if getattr(event, "button", None) in self._shoot_buttons:
-                    self.game.player.shoot()
                 if getattr(event, "button", None) in self._ability_buttons:
                     self.game.player.trigger_slide_animation()
             if event.type == pygame.CONTROLLERBUTTONDOWN:
@@ -248,9 +242,6 @@ class KeyboardManager:
                     if self.game.player.jump():
                         self.game.audio.play("jump")
 
-                # X for shooting
-                if event.key == pygame.K_x:
-                    self.game.player.shoot()
                 if event.key in (pygame.K_s, pygame.K_DOWN):
                     self.game.player.trigger_slide_animation()
 
@@ -298,10 +289,6 @@ class KeyboardManager:
 
         mouse_buttons = pygame.mouse.get_pressed()
         left = bool(mouse_buttons[0])
-
-        if left:  # Left mouse button
-            if not getattr(self.game.player, "slide_ability_active", False):
-                self.game.player.shoot()
 
         # Slide hold: keyboard S/Down or controller ability button (B)
         ability_held = self._controller_ability_held() or self._kbd_slide_held

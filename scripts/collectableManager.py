@@ -16,6 +16,8 @@ APPLE_RESPAWN_MS = 5000
 APPLE_BUFF_MS = 5000
 HEART_RESPAWN_MS = 8000
 HEART_HEAL_AMOUNT = 40
+HEART_PICKUP_SIZE = 12
+HEART_PICKUP_HITBOX = 16
 
 
 def _discover_skin_paths() -> List[str]:
@@ -182,7 +184,7 @@ class CollectableManager:
             rng = RNGService.get()
             pos = self.heart_spawn_points[rng.randint(0, len(self.heart_spawn_points) - 1)]
             self.heart_pickup["pos"] = pos
-            self.heart_pickup["rect"] = pygame.Rect(pos[0], pos[1], 16, 16)
+            self.heart_pickup["rect"] = pygame.Rect(pos[0] - 2, pos[1] - 2, HEART_PICKUP_HITBOX, HEART_PICKUP_HITBOX)
             self.heart_pickup["spawned_at"] = pygame.time.get_ticks()
             self.heart_pickup["active"] = True
 
@@ -257,9 +259,9 @@ class CollectableManager:
                 player = getattr(self.game, "player", None)
                 if player is not None and player.health < player.health_max:
                     player.health = min(player.health_max, player.health + HEART_HEAL_AMOUNT)
-                    self.game.audio.play("collect")
-                    self.heart_pickup["active"] = False
-                    self.heart_pickup["next_spawn"] = now + HEART_RESPAWN_MS
+                self.game.audio.play("collect")
+                self.heart_pickup["active"] = False
+                self.heart_pickup["next_spawn"] = now + HEART_RESPAWN_MS
             return
 
         if now < self.heart_pickup["next_spawn"]:
@@ -268,7 +270,7 @@ class CollectableManager:
         if pos == (0, 0):
             pos = self.heart_spawn_points[rng.randint(0, len(self.heart_spawn_points) - 1)]
         self.heart_pickup["pos"] = pos
-        self.heart_pickup["rect"] = pygame.Rect(pos[0], pos[1], 16, 16)
+        self.heart_pickup["rect"] = pygame.Rect(pos[0] - 2, pos[1] - 2, HEART_PICKUP_HITBOX, HEART_PICKUP_HITBOX)
         self.heart_pickup["spawned_at"] = now
         self.heart_pickup["active"] = True
 

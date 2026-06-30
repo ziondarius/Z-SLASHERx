@@ -80,6 +80,10 @@ class Game:
 
         # Asset Manager (Issue 15). Gradually replace direct util calls with manager.
         am = AssetManager.get()
+        heart_size = 12
+        heart_full = am.get_image("collectables/heart/full.png")
+        heart_half = am.get_image("collectables/heart/half.png")
+        heart_empty = am.get_image("collectables/heart/empty.png")
         self.assets = {
             "decor": am.get_image_frames("tiles/decor"),
             "grass": am.get_image_frames("tiles/grass"),
@@ -94,9 +98,9 @@ class Game:
             "particle/particle": am.get_animation("particles/particle", img_dur=6, loop=False),
             "coin": am.get_animation("collectables/coin", img_dur=6),
             "apple": am.get_animation("collectables/apple", img_dur=8),
-            "heart_full": am.get_image("collectables/heart/full.png"),
-            "heart_half": am.get_image("collectables/heart/half.png"),
-            "heart_empty": am.get_image("collectables/heart/empty.png"),
+            "heart_full": pygame.transform.scale(heart_full, (heart_size, heart_size)),
+            "heart_half": pygame.transform.scale(heart_half, (heart_size, heart_size)),
+            "heart_empty": pygame.transform.scale(heart_empty, (heart_size, heart_size)),
             "flag": am.get_image_frames("tiles/collectables/flag"),
             "gun": am.get_image("gun.png"),
             "projectile": am.get_image("projectile.png"),

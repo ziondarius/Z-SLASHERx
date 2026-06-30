@@ -19,7 +19,6 @@ from scripts.constants import (
     HORIZONTAL_FRICTION,
     JUMP_VELOCITY,
     MAX_FALL_SPEED,
-    PROJECTILE_SPEED,
     WALL_JUMP_HORIZONTAL_VEL,
     WALL_JUMP_VERTICAL_VEL,
     WALL_SLIDE_MAX_SPEED,
@@ -92,7 +91,6 @@ class PhysicsEntity:
                     self.pos[0] = entity_rect.x
 
     def apply_vertical_movement(self, tilemap, frame_movement):
-        prev_bottom = self.pos[1] + self.size[1]
         self.pos[1] += frame_movement[1]
         entity_rect = self.rect()
         if frame_movement[1] != 0:
@@ -106,28 +104,7 @@ class PhysicsEntity:
                         self.collisions["up"] = True
                     self.pos[1] = entity_rect.y
 
-            # One-way cloud tops: player can pass upward but land while falling.
-            if (
-                frame_movement[1] > 0
-                and not self.collisions["down"]
-                and self.type == "player"
-                and hasattr(self.game, "clouds")
-                and hasattr(self.game, "scroll")
-                and hasattr(self.game, "display")
-            ):
-                cloud_rects = self.game.clouds.get_jumpthru_rects_around(
-                    entity_rect,
-                    self.game.scroll,
-                    (self.game.display.get_width(), self.game.display.get_height()),
-                )
-                for rect in cloud_rects:
-                    if entity_rect.right <= rect.left or entity_rect.left >= rect.right:
-                        continue
-                    if prev_bottom <= rect.top + 2 and entity_rect.bottom >= rect.top:
-                        entity_rect.bottom = rect.top
-                        self.collisions["down"] = True
-                        self.pos[1] = entity_rect.y
-                        break
+            # Clouds are visual-only now; no jump-through landing collision.
 
     def update_orientation(self, movement):
         if movement[0] > 0:
@@ -427,14 +404,6 @@ class Player(PhysicsEntity):
         self.move_speed = 2.2
         self.jump_power = base_jump
         self.shadow_form_max_ms = 5000
-        try:
-            skin_path = cm.SKIN_PATHS[self.skin]
-        except Exception:
-            skin_path = "default"
-        if skin_path == "golden":
-            self.move_speed = 2.85
-            self.jump_power = base_jump * 1.25
-            self.shadow_form_max_ms = 9000
         self.shadow_form_ms = min(getattr(self, "shadow_form_ms", self.shadow_form_max_ms), self.shadow_form_max_ms)
 
     # --- New canonical attribute ---
@@ -456,23 +425,8 @@ class Player(PhysicsEntity):
         self._lives = value
 
     def shoot(self):
-        if self.slide_ability_active:
-            return False
-        if self.shoot_cooldown > 0:
-            return False
-        if self.services:
-            self.services.play("shoot")
-        else:
-            self.game.audio.play("shoot")
-        direction = -PROJECTILE_SPEED if self.flip else PROJECTILE_SPEED
-        (self.services.projectiles.spawn if self.services else self.game.projectiles.spawn)(
-            self.rect().centerx + (7 * (-1 if self.flip else 1)),
-            self.rect().centery,
-            direction,
-            "player",
-        )
-        self.shoot_cooldown = 10
-        return True
+        # Player bullets are disabled. Keep the API so old callers do not break.
+        return False
 
     def take_damage(self, amount: int):
         if self.game.dead:

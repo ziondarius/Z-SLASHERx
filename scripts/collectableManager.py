@@ -259,7 +259,6 @@ class CollectableManager:
                     player.health = min(player.health_max, player.health + HEART_HEAL_AMOUNT)
                     self.game.audio.play("collect")
                     self.heart_pickup["active"] = False
-                    self.heart_pickup["rect"] = None
                     self.heart_pickup["next_spawn"] = now + HEART_RESPAWN_MS
             return
 
@@ -274,15 +273,16 @@ class CollectableManager:
         self.heart_pickup["active"] = True
 
     def _render_heart_pickup(self, surf: pygame.Surface, offset=(0, 0)) -> None:
-        if not self.heart_pickup["active"]:
+        if self.heart_pickup["rect"] is None:
             return
         hx, hy = self.heart_pickup["pos"]
-        x = int(hx - offset[0] + 8)
-        y = int(hy - offset[1] + 8)
-        # Simple pixel-heart style marker.
-        pygame.draw.circle(surf, (220, 30, 60), (x - 3, y - 2), 4)
-        pygame.draw.circle(surf, (220, 30, 60), (x + 3, y - 2), 4)
-        pygame.draw.polygon(surf, (220, 30, 60), [(x - 8, y), (x + 8, y), (x, y + 10)])
+        x = int(hx - offset[0])
+        y = int(hy - offset[1])
+        image_key = "heart_full" if self.heart_pickup["active"] else "heart_empty"
+        img = self.game.assets.get(image_key)
+        if img is None:
+            return
+        surf.blit(img, (x, y))
 
     def load_collectables(self):
         if os.path.exists(DATA_FILE):

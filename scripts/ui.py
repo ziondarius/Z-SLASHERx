@@ -325,6 +325,10 @@ class UI:
         game.clouds.render(game.display_2, offset=render_scroll)
         game.tilemap.render(game.display, offset=render_scroll)
 
+        # Collectables should sit behind players/enemies so pickups don't
+        # visually cover the characters.
+        game.cm.render(game.display, offset=render_scroll)
+
         # Enemies
         for enemy in game.enemies:
             enemy.render(game.display, offset=render_scroll)
@@ -356,8 +360,6 @@ class UI:
             for spark in game.sparks.copy():
                 spark.render(game.display, offset=render_scroll)
 
-        # Collectables update & render
-        game.cm.render(game.display, offset=render_scroll)
         # Hazards
         spike_img = UI.load_image_cached("data/images/hazards/spike.png", scale=1)
         for spike in getattr(game, "spikes", []):

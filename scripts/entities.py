@@ -750,6 +750,16 @@ class Player(PhysicsEntity):
             skin_path = "default"
         if self.action == "slide" and skin_path == "red":
             y_adjust = 5
+        if self.action == "run" and skin_path == "golden":
+            try:
+                frame_count = max(1, len(self.animation.images))
+                # Time-based override keeps the golden run visibly animated even if
+                # a state transition briefly reuses the same animation object.
+                self.animation.frame = (
+                    (pygame.time.get_ticks() // 80) % frame_count
+                ) * self.animation.img_duration
+            except Exception:
+                pass
         if abs(self.dashing) <= DASH_MIN_ACTIVE_ABS:
             if y_adjust == 0:
                 super().render(surf, offset=offset)

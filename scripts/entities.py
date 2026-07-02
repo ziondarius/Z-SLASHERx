@@ -13,6 +13,8 @@ from scripts.constants import (
     DASH_MIN_ACTIVE_ABS,
     DASH_SPEED,
     DASH_TRAIL_PARTICLE_SPEED,
+    ENEMY_DIRECTION_BASE,
+    ENEMY_DIRECTION_SCALE_LOG,
     ENEMY_SHOOT_BASE,
     ENEMY_SHOOT_SCALE_LOG,
     GRAVITY_ACCEL,
@@ -61,7 +63,11 @@ class PhysicsEntity:
             if self.type == "enemy":
                 self.animation = self.game.assets[self.type + "/" + self.action].copy()
             if self.type == "player":
-                self.animation = self.game.assets[self.type + "/" + cm.SKIN_PATHS[self.skin] + "/" + self.action].copy()
+                if self.enemy_form_active:
+                    enemy_action = self.action if self.action in {"idle", "run"} else "idle"
+                    self.animation = self.game.assets[f"enemy/{enemy_action}"].copy()
+                else:
+                    self.animation = self.game.assets[self.type + "/" + cm.SKIN_PATHS[self.skin] + "/" + self.action].copy()
 
     # --- Physics step granular methods (Issue 20) ---
     def begin_update(self):
@@ -215,7 +221,7 @@ class Enemy(PhysicsEntity):
             self.velocity[1] = JUMP_VELOCITY
 
         # Apply shooting intent
-        if decision.get("shoot"):
+        if decision.get("shoot") and not getattr(self.game.player, "enemy_form_active", False):
             if self.services:
                 self.services.play("shoot")
             else:
@@ -326,6 +332,7 @@ class Player(PhysicsEntity):
         Legacy attribute 'lifes' provided as property alias for old references.
         """
         self.skin = 0
+        self.enemy_form_active = False
         super().__init__(game, "player", pos, size, id, services=services)
         self.air_time = 0
         self.jumps = 2
@@ -393,6 +400,8 @@ class Player(PhysicsEntity):
         except Exception:
             self.skin = 0
         self._apply_skin_stats()
+        if not self._can_use_enemy_form():
+            self.enemy_form_active = False
         current_action = self.action or "idle"
         # Force animation swap even if action label stays the same.
         self.action = ""
@@ -405,6 +414,38 @@ class Player(PhysicsEntity):
         self.jump_power = base_jump
         self.shadow_form_max_ms = 5000
         self.shadow_form_ms = min(getattr(self, "shadow_form_ms", self.shadow_form_max_ms), self.shadow_form_max_ms)
+
+    def _enemy_move_speed(self) -> float:
+        level = max(0, int(getattr(settings, "selected_level", 0)))
+        return ENEMY_DIRECTION_BASE * (1 + ENEMY_DIRECTION_SCALE_LOG * math.log(level + 1))
+
+    def _can_use_enemy_form(self) -> bool:
+        try:
+            skin_path = cm.SKIN_PATHS[self.skin]
+        except Exception:
+            skin_path = "default"
+        return skin_path == "red"
+
+    def toggle_enemy_form(self) -> bool:
+        if not self._can_use_enemy_form():
+            return False
+        self.enemy_form_active = not self.enemy_form_active
+        if self.enemy_form_active:
+            self._shadow_requested = False
+            self.shadow_form_active = False
+            self.shadow_form_ms = self.shadow_form_max_ms
+            self.dashing = 0
+            self.slide_ability_active = False
+            self.slide_hold_active = False
+            self.slide_anim_until = 0
+            self.move_speed = self._enemy_move_speed()
+            self.action = ""
+            self.set_action("idle")
+        else:
+            self._apply_skin_stats()
+            self.action = ""
+            self.set_action("idle")
+        return self.enemy_form_active
 
     # --- New canonical attribute ---
     @property
@@ -442,6 +483,11 @@ class Player(PhysicsEntity):
         self.grapple_aim_world = [float(world_pos[0]), float(world_pos[1])]
 
     def set_shadow_form(self, active: bool):
+        if self.enemy_form_active:
+            self._shadow_requested = False
+            self.shadow_form_active = False
+            self.shadow_form_ms = self.shadow_form_max_ms
+            return
         self._shadow_requested = bool(active)
         if not self._shadow_requested:
             self.shadow_form_active = False
@@ -452,10 +498,10 @@ class Player(PhysicsEntity):
             skin_path = cm.SKIN_PATHS[self.skin]
         except Exception:
             skin_path = "default"
-        return skin_path in {"default", "red"}
+        return skin_path == "default"
 
     def trigger_slide_animation(self, duration_ms: int = 2000) -> None:
-        if not self._can_use_slide_ability():
+        if self.enemy_form_active or not self._can_use_slide_ability():
             return
         now = pygame.time.get_ticks()
         self.slide_hold_active = True
@@ -483,6 +529,8 @@ class Player(PhysicsEntity):
         self.slide_ability_started_at = 0
 
     def activate_slide_ability(self, move_dir: float = 0.0) -> None:
+        if self.enemy_form_active:
+            return
         now = pygame.time.get_ticks()
         if now < self.slide_cooldown_until:
             return
@@ -521,6 +569,9 @@ class Player(PhysicsEntity):
 
     def update(self, tilemap, movement=(0, 0)):
         now = pygame.time.get_ticks()
+        if self.enemy_form_active and not self._can_use_enemy_form():
+            self.enemy_form_active = False
+            self._apply_skin_stats()
         if self.slide_ability_active:
             if now >= self.slide_ability_until:
                 self._end_slide_ability()
@@ -596,6 +647,16 @@ class Player(PhysicsEntity):
                 )
             return
 
+        if self.enemy_form_active:
+            # Match the enemy patrol pace more closely in disguise.
+            self.move_speed = self._enemy_move_speed() * 1.25
+            self.slide_ability_active = False
+            self.slide_hold_active = False
+            self.slide_anim_until = 0
+            self.slide_ability_until = 0
+            self.slide_ability_started_at = 0
+            self.slide_cooldown_until = 0
+
         if self.slide_ability_active and self.collisions.get("down", False):
             # Pre-move edge/wall stop so slide does not step past a ledge.
             slide_step_px = self.slide_speed
@@ -664,7 +725,12 @@ class Player(PhysicsEntity):
 
         if not self.wall_slide:
             moving_horizontally = abs(self.velocity[0]) > 0.15 or abs(effective_movement[0]) > 0.05
-            if now < self.slide_anim_until:
+            if self.enemy_form_active:
+                if moving_horizontally:
+                    self.set_action("run")
+                else:
+                    self.set_action("idle")
+            elif now < self.slide_anim_until:
                 self.set_action("slide")
             elif ended_by_wall_or_edge:
                 self.set_action("idle")
@@ -750,10 +816,10 @@ class Player(PhysicsEntity):
             skin_path = "default"
         if self.action == "slide" and skin_path == "red":
             y_adjust = 5
-        if self.action == "run" and skin_path == "golden":
+        if self.action == "run":
             try:
                 frame_count = max(1, len(self.animation.images))
-                # Time-based override keeps the golden run visibly animated even if
+                # Time-based override keeps all run animations visibly cycling even if
                 # a state transition briefly reuses the same animation object.
                 self.animation.frame = (
                     (pygame.time.get_ticks() // 80) % frame_count
@@ -821,7 +887,7 @@ class Player(PhysicsEntity):
             return True
 
     def dash(self):
-        if self.slide_ability_active:
+        if self.enemy_form_active or self.slide_ability_active:
             return
         if not self.dashing:
             if self.services:

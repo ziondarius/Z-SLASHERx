@@ -119,6 +119,14 @@ class KeyboardManager:
                 pass
         return 0.0
 
+    def _is_red_ninja(self) -> bool:
+        try:
+            from scripts.collectableManager import CollectableManager as cm
+
+            return cm.SKIN_PATHS[getattr(self.game.player, "skin", 0)] == "red"
+        except Exception:
+            return False
+
     # New centralized event processing (Issue 10 migration support)
     def process_events(self, events):
         """Process a batch of pygame events.
@@ -156,7 +164,11 @@ class KeyboardManager:
                     if self.game.player.jump():
                         self.game.audio.play("jump")
                 if event.key in (pygame.K_s, pygame.K_DOWN):
-                    self._kbd_slide_held = True
+                    if self._is_red_ninja() and hasattr(self.game.player, "toggle_enemy_form"):
+                        self.game.player.toggle_enemy_form()
+                        self._kbd_slide_held = False
+                    else:
+                        self._kbd_slide_held = True
                 if event.key == pygame.K_r:
                     self.game.dead += 1
                     self.game.player.lives -= 1
@@ -171,7 +183,7 @@ class KeyboardManager:
                 if event.key in (pygame.K_d, pygame.K_RIGHT):
                     self._kbd_right = False
                     self._apply_horizontal_movement()
-                if event.key in (pygame.K_s, pygame.K_DOWN):
+                if event.key in (pygame.K_s, pygame.K_DOWN) and not self._is_red_ninja():
                     self._kbd_slide_held = False
             if event.type == pygame.JOYBUTTONDOWN:
                 if getattr(self.game.player, "slide_ability_active", False):
@@ -181,12 +193,12 @@ class KeyboardManager:
                         self.game.audio.play("jump")
                 if getattr(event, "button", None) in self._dash_trigger_buttons:
                     self.game.player.dash()
-                if getattr(event, "button", None) in self._ability_buttons:
+                if getattr(event, "button", None) in self._ability_buttons and not self._is_red_ninja():
                     self.game.player.trigger_slide_animation()
             if event.type == pygame.CONTROLLERBUTTONDOWN:
                 btn = getattr(event, "button", None)
                 # SDL gamecontroller mapping fallback for ability button.
-                if btn in self._ability_buttons:
+                if btn in self._ability_buttons and not self._is_red_ninja():
                     self.game.player.trigger_slide_animation()
                 if btn == 9:
                     self._ctrl_lb_down = True
@@ -243,7 +255,10 @@ class KeyboardManager:
                         self.game.audio.play("jump")
 
                 if event.key in (pygame.K_s, pygame.K_DOWN):
-                    self.game.player.trigger_slide_animation()
+                    if self._is_red_ninja() and hasattr(self.game.player, "toggle_enemy_form"):
+                        self.game.player.toggle_enemy_form()
+                    else:
+                        self.game.player.trigger_slide_animation()
 
                 # Respawn
                 if event.key == pygame.K_r:
@@ -276,6 +291,16 @@ class KeyboardManager:
         # Poll joystick each frame so left-stick movement remains responsive.
         self._apply_horizontal_movement()
 
+        if self._is_red_ninja() and hasattr(self.game.player, "enemy_form_active") and self.game.player.enemy_form_active:
+            if hasattr(self.game.player, "release_slide_animation"):
+                self.game.player.release_slide_animation()
+            if hasattr(self.game.player, "set_shadow_form"):
+                self.game.player.set_shadow_form(False)
+            self._space_was_down = False
+            self._hover_was_down = False
+            self._dash_was_down = False
+            return
+
         # Convert screen mouse coordinates to world coordinates.
         mx, my = pygame.mouse.get_pos()
         try:
@@ -292,6 +317,8 @@ class KeyboardManager:
 
         # Slide hold: keyboard S/Down or controller ability button (B)
         ability_held = self._controller_ability_held() or self._kbd_slide_held
+        if self._is_red_ninja():
+            ability_held = False
         if ability_held:
             self.game.player.trigger_slide_animation()
         else:
@@ -308,6 +335,13 @@ class KeyboardManager:
             self._space_was_down = bool(keys[pygame.K_SPACE])
             self._hover_was_down = False
             self._dash_was_down = self._space_was_down
+            return
+        if self._is_red_ninja() and getattr(self.game.player, "enemy_form_active", False):
+            self._space_was_down = bool(keys[pygame.K_SPACE])
+            self._hover_was_down = False
+            self._dash_was_down = self._space_was_down
+            if hasattr(self.game.player, "set_shadow_form"):
+                self.game.player.set_shadow_form(False)
             return
         space_held = bool(keys[pygame.K_SPACE])
         hover_held = space_held or self._controller_hover_held()

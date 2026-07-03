@@ -15,9 +15,10 @@ Projectile record fields:
     vel: [vx: float, vy: float] (currently only horizontal)
     age: int (frames since spawn)
     owner: str ("player" | "enemy") for future friendly-fire logic
+    kind: str ("projectile" | "arrow")
 
 Public API:
-    spawn(x, y, vx, owner): -> projectile dict
+    spawn(x, y, vx, owner, kind="projectile"): -> projectile dict
     update(tilemap, players, enemies) -> collisions summary dict
     iter() -> iterator over active projectiles (for rendering)
     clear() -> remove all
@@ -53,6 +54,7 @@ class ProjectileSystem:
     def __init__(self, game):
         self.game = game
         self._projectiles: List[Dict[str, Any]] = []
+        self._arrow_img = None
 
     # --- Collection Protocol -------------------------------------------------
     def __len__(self) -> int:  # pragma: no cover - trivial
@@ -62,14 +64,20 @@ class ProjectileSystem:
         return iter(self._projectiles)
 
     # --- API -----------------------------------------------------------------
-    def spawn(self, x: float, y: float, vx: float, owner: str):
-        proj = {"pos": [x, y], "vel": [vx, 0.0], "age": 0, "owner": owner}
+    def spawn(self, x: float, y: float, vx: float, owner: str, kind: str = "projectile"):
+        proj = {"pos": [x, y], "vel": [vx, 0.0], "age": 0, "owner": owner, "kind": kind}
         self._projectiles.append(proj)
         spawn_projectile_sparks(self.game, proj["pos"], vx)
         return proj
 
     def clear(self):  # pragma: no cover - utility
         self._projectiles.clear()
+
+    def _arrow_surface(self):
+        if self._arrow_img is None:
+            base = self.game.assets["arrow"]
+            self._arrow_img = pygame.transform.scale(base, (18, 10))
+        return self._arrow_img
 
     # --- Simulation ----------------------------------------------------------
     def update(self, tilemap, players, enemies):
@@ -150,7 +158,7 @@ class ProjectileSystem:
                         if proj in self._projectiles:
                             self._projectiles.remove(proj)
                             if hasattr(player, "take_damage"):
-                                player.take_damage(25)
+                                player.take_damage(1)
                             else:
                                 player.lives -= 1
                             self.game.audio.play("hit")
@@ -173,8 +181,14 @@ class ProjectileSystem:
 
         Keeps renderer/UI unaware of internal structure details.
         """
-        img = self.game.assets["projectile"]
         for proj in self._projectiles:
+            kind = proj.get("kind", "projectile")
+            if kind == "arrow" and "arrow" in self.game.assets:
+                img = self._arrow_surface()
+                if proj["vel"][0] < 0:
+                    img = pygame.transform.flip(img, True, False)
+            else:
+                img = self.game.assets["projectile"]
             yield img, proj["pos"][0] - img.get_width() / 2, proj["pos"][1] - img.get_height() / 2
 
 

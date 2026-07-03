@@ -40,25 +40,10 @@ class ProgressTracker:
             self.levels = list_levels()
         # Ensure deterministic ordering
         self.levels.sort()
-        # Initialize unlocked set from settings legacy structure
-        # (skip during tests for determinism)
-        if "PYTEST_CURRENT_TEST" not in os.environ:
-            if settings.playable_levels:
-                # Migration: import every level flagged True (legacy behavior) so existing
-                # players retain their progress. Always ensure level 0 is included.
-                for lvl, playable in settings.playable_levels.items():
-                    if playable:
-                        self.unlocked.add(lvl)
-                self.unlocked.add(0)
-            if not self.unlocked:
-                # Fallback safety
-                self.unlocked.add(0)
-        else:
-            # Test environment: start with only level 0 unlocked
-            # regardless of persisted settings.
-            self.unlocked = {0}
-        # Developer override: if DEV_UNLOCK_LEVELS=1,
-        # treat all discovered levels unlocked
+        # Start locked by default: only the first level is available until
+        # the player clears it and unlocks the next one.
+        self.unlocked = {0}
+        # Preserve explicit dev override for debugging.
         if os.environ.get("DEV_UNLOCK_LEVELS") == "1" and "PYTEST_CURRENT_TEST" not in os.environ:
             self.unlocked.update(self.levels)
         # Normalize settings map to discovered levels only

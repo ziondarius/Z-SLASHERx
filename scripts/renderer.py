@@ -144,6 +144,14 @@ class Renderer:
             if seq is not None and self.perf_hud.last_sample:
                 seq.append("perf")
 
+        # Mirror Phantom tint: subtle warm wash over the final frame.
+        if getattr(getattr(game, "player", None), "mirror_phantom_active", False):
+            tint = pygame.Surface(game.display_2.get_size(), pygame.SRCALPHA)
+            tint.fill((255, 236, 120, 52))
+            game.display_2.blit(tint, (0, 0))
+            if seq is not None:
+                seq.append("mirror_phantom_tint")
+
         # 7. Post effects (screenshake) then present
         Effects.screenshake(game)
         if seq is not None:
@@ -169,29 +177,31 @@ class Renderer:
         UI.render_game_ui_element(game.display_2, f"Level: {game.level}", game.BASE_W // 2 - 40, 5)
         if getattr(game, "player", None):
             lives = getattr(game.player, "lives", getattr(game.player, "lifes", 0))
-            UI.render_game_ui_element(game.display_2, f"Lives: {lives}", 5, 5)
-            # Health bar
-            hp = int(getattr(game.player, "health", 100))
-            hp_max = max(1, int(getattr(game.player, "health_max", 100)))
-            bx, by, bw, bh = 5, 36, 120, 10
-            pygame.draw.rect(game.display_2, (40, 40, 40), (bx, by, bw, bh))
-            fill_w = int(bw * max(0.0, min(1.0, hp / hp_max)))
-            color = (50, 220, 90) if hp > hp_max * 0.4 else (230, 190, 45) if hp > hp_max * 0.2 else (220, 50, 50)
-            pygame.draw.rect(game.display_2, color, (bx, by, fill_w, bh))
-            pygame.draw.rect(game.display_2, (255, 255, 255), (bx, by, bw, bh), 1)
-            UI.render_menu_ui_element(game.display_2, f"HP: {hp}/{hp_max}", game.BASE_W - 170, 24)
+            full_heart = game.assets.get("heart_full")
+            empty_heart = game.assets.get("heart_empty")
+            if full_heart is not None and empty_heart is not None:
+                # Render a fixed 4-heart row with a black outline so life loss is obvious.
+                heart_x = 5
+                heart_y = 5
+                heart_gap = 14
+                for idx in range(4):
+                    heart_img = full_heart if idx < int(lives) else empty_heart
+                    outline = heart_img.copy()
+                    outline.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+                    for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                        game.display_2.blit(outline, (heart_x + idx * heart_gap + ox, heart_y + oy))
+                    game.display_2.blit(heart_img, (heart_x + idx * heart_gap, heart_y))
             # Timers for power states
             now = pygame.time.get_ticks()
             apple_ms = max(0, int(getattr(game.player, "infinite_jump_until", 0)) - now)
-            UI.render_game_ui_element(game.display_2, f"Apple Jump: {apple_ms / 1000:.1f}s", 5, 50)
+            UI.render_game_ui_element(game.display_2, f"Apple Jump: {apple_ms / 1000:.1f}s", 5, 19)
             if getattr(game.player, "shadow_form_active", False):
                 mist_ms = max(0, int(getattr(game.player, "shadow_form_ms", 0)))
-                UI.render_game_ui_element(game.display_2, f"Black Mist: {mist_ms / 1000:.1f}s", 5, 60)
+                UI.render_game_ui_element(game.display_2, f"Black Mist: {mist_ms / 1000:.1f}s", 5, 29)
             else:
-                UI.render_game_ui_element(game.display_2, "Black Mist: Hold Dash 2s", 5, 60)
+                UI.render_game_ui_element(game.display_2, "Black Mist: Hold Dash 2s", 5, 29)
+            self._render_ability_status(game, now, y=39)
         self._render_minimap(game)
-        UI.render_game_ui_element(game.display_2, f"${game.cm.coins}", 5, 15)
-        UI.render_game_ui_element(game.display_2, f"Ammo:  {game.cm.ammo}", 5, 25)
         # Boss health bar (if present on this level)
         boss = None
         for e in getattr(game, "enemies", []):
@@ -275,6 +285,58 @@ class Renderer:
         pygame.draw.rect(panel, (120, 120, 140), (vx, vy, vw, vh), 1)
 
         game.display_2.blit(panel, (panel_x, panel_y))
+
+    def _render_ability_status(self, game, now: int, y: int) -> None:
+        from scripts.collectableManager import CollectableManager as cm
+        from scripts.ui import UI
+
+        player = getattr(game, "player", None)
+        if not player:
+            return
+
+        try:
+            character_path = cm.CHARACTER_PATHS[getattr(player, "character", 0)]
+        except Exception:
+            character_path = "default"
+
+        if character_path == "default":
+            length_ms = 5000
+            active = bool(getattr(player, "speed_boost_active", False))
+            active_until = int(getattr(player, "speed_boost_until", 0))
+            recharge_until = int(getattr(player, "speed_boost_cooldown_until", 0))
+            if active and now < active_until:
+                UI.render_game_ui_element(game.display_2, f"Ability Time Remaining: {max(0, active_until - now) / 1000:.1f}s", 5, y)
+            elif now < recharge_until:
+                UI.render_game_ui_element(game.display_2, f"Recharge Time Remaining: {max(0, recharge_until - now) / 1000:.1f}s", 5, y)
+            else:
+                UI.render_game_ui_element(game.display_2, f"Ability Length: {length_ms / 1000:.1f}s", 5, y)
+            return
+
+        if character_path == "golden":
+            length_ms = 4000
+            active = bool(getattr(player, "mirror_phantom_active", False))
+            active_until = int(getattr(player, "mirror_phantom_until", 0))
+            recharge_until = int(getattr(player, "mirror_phantom_cooldown_until", 0))
+            if active and now < active_until:
+                UI.render_game_ui_element(game.display_2, f"Ability Time Remaining: {max(0, active_until - now) / 1000:.1f}s", 5, y)
+            elif now < recharge_until:
+                UI.render_game_ui_element(game.display_2, f"Recharge Time Remaining: {max(0, recharge_until - now) / 1000:.1f}s", 5, y)
+            else:
+                UI.render_game_ui_element(game.display_2, f"Ability Length: {length_ms / 1000:.1f}s", 5, y)
+            return
+
+        if character_path == "red":
+            UI.render_game_ui_element(game.display_2, "Ability Length: Infinite", 5, y)
+            return
+
+        if character_path == "archer":
+            length_ms = 0
+            recharge_until = int(getattr(player, "arrow_cooldown_until", 0))
+            if now < recharge_until:
+                UI.render_game_ui_element(game.display_2, f"Recharge Time Remaining: {max(0, recharge_until - now) / 1000:.1f}s", 5, y)
+            else:
+                UI.render_game_ui_element(game.display_2, f"Ability Length: {length_ms / 1000:.1f}s", 5, y)
+            return
 
 
 __all__ = ["Renderer"]

@@ -80,6 +80,10 @@ class Game:
 
         # Asset Manager (Issue 15). Gradually replace direct util calls with manager.
         am = AssetManager.get()
+        heart_size = 12
+        heart_full = am.get_image("collectables/heart/full.png")
+        heart_half = am.get_image("collectables/heart/half.png")
+        heart_empty = am.get_image("collectables/heart/empty.png")
         self.assets = {
             "decor": am.get_image_frames("tiles/decor"),
             "grass": am.get_image_frames("tiles/grass"),
@@ -94,12 +98,16 @@ class Game:
             "particle/particle": am.get_animation("particles/particle", img_dur=6, loop=False),
             "coin": am.get_animation("collectables/coin", img_dur=6),
             "apple": am.get_animation("collectables/apple", img_dur=8),
+            "heart_full": pygame.transform.scale(heart_full, (heart_size, heart_size)),
+            "heart_half": pygame.transform.scale(heart_half, (heart_size, heart_size)),
+            "heart_empty": pygame.transform.scale(heart_empty, (heart_size, heart_size)),
             "flag": am.get_image_frames("tiles/collectables/flag"),
             "gun": am.get_image("gun.png"),
+            "arrow": am.get_image("arrow.png"),
             "projectile": am.get_image("projectile.png"),
         }
-        # Load animations for all discovered player skins.
-        for skin_path in CollectableManager.SKIN_PATHS:
+        # Load animations for all discovered player characters.
+        for character_path in CollectableManager.CHARACTER_PATHS:
             for action, kwargs in (
                 ("idle", {"img_dur": 6}),
                 ("run", {"img_dur": 4}),
@@ -107,9 +115,9 @@ class Game:
                 ("slide", {}),
                 ("wall_slide", {}),
             ):
-                key = f"player/{skin_path}/{action}"
+                key = f"player/{character_path}/{action}"
                 try:
-                    self.assets[key] = am.get_animation(f"entities/player/{skin_path}/{action}", **kwargs)
+                    self.assets[key] = am.get_animation(f"entities/player/{character_path}/{action}", **kwargs)
                 except Exception:
                     fallback_key = f"player/default/{action}"
                     if fallback_key in self.assets:
@@ -138,7 +146,7 @@ class Game:
         self.km = KeyboardManager(self)
 
         self.playerID = 0
-        self.playerSkin = settings.selected_skin
+        self.playerCharacter = settings.selected_character
 
         # Load the selected level
         self.load_level(self.level)
@@ -241,7 +249,7 @@ class Game:
 
             enemy_id = 0
             player_id = 0
-            skin = self.playerSkin
+            character = self.playerCharacter
             for spawner in self.tilemap.extract([("spawners", 0), ("spawners", 1)]):
                 if spawner["variant"] == 0:
                     player = Player(
@@ -252,7 +260,7 @@ class Game:
                         lives=lives,
                         respawn_pos=list(spawner["pos"]),
                     )
-                    player.set_skin(skin)
+                    player.set_character(character)
                     player.air_time = 0
                     if hasattr(player, "health_max"):
                         player.health = player.health_max

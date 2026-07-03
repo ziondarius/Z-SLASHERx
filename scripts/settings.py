@@ -17,7 +17,7 @@ class Settings:
         self._selected_level = 0
         self.selected_editor_level = 0
         self.selected_weapon = 0
-        self.selected_skin = 0
+        self._selected_character = 0
         self.show_perf_overlay = True
         self._fullscreen = False
         self._ghost_enabled = True
@@ -89,6 +89,18 @@ class Settings:
         new_val = max(0, value)
         if new_val != self._selected_level:
             self._selected_level = new_val
+            self._dirty = True
+            self.flush()
+
+    @property
+    def selected_character(self):
+        return self._selected_character
+
+    @selected_character.setter
+    def selected_character(self, value):
+        new_val = max(0, value)
+        if new_val != self._selected_character:
+            self._selected_character = new_val
             self._dirty = True
             self.flush()
 
@@ -192,7 +204,10 @@ class Settings:
                     self._selected_level = data.get("selected_level", self._selected_level)
                     self.selected_editor_level = data.get("selected_editor_level", self.selected_editor_level)
                     self.selected_weapon = data.get("selected_weapon", self.selected_weapon)
-                    self.selected_skin = data.get("selected_skin", self.selected_skin)
+                    self.selected_character = data.get(
+                        "selected_character",
+                        data.get("selected_skin", self.selected_character),
+                    )
                     self.show_perf_overlay = data.get("show_perf_overlay", self.show_perf_overlay)
                     self._fullscreen = bool(data.get("fullscreen", self._fullscreen))
                     self._ghost_enabled = bool(data.get("ghost_enabled", self._ghost_enabled))
@@ -239,7 +254,7 @@ class Settings:
             "sound_volume": self._sound_volume,
             "selected_level": self._selected_level,
             "selected_editor_level": self.selected_editor_level,
-            "selected_skin": self.selected_skin,
+            "selected_character": self.selected_character,
             "selected_weapon": self.selected_weapon,
             "playable_levels": {str(k): v for k, v in self.playable_levels.items()},
             "show_perf_overlay": self.show_perf_overlay,
@@ -256,6 +271,14 @@ class Settings:
             log.debug("Settings flushed")
         except IOError as e:
             log.error("Error saving settings", e)
+
+    @property
+    def selected_skin(self):
+        return self.selected_character
+
+    @selected_skin.setter
+    def selected_skin(self, value):
+        self.selected_character = value
 
 
 settings = Settings()

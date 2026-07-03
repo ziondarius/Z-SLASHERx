@@ -420,7 +420,7 @@ class GameState(State):
                         replay_mgr.abort_current_run()
                     except Exception:
                         pass
-                g.load_level(g.level, SAVE_DEFAULT_LIVES, respawn=True)
+                g.load_level(g.level, player_lives_attr, respawn=True)
             if g.dead > RESPAWN_DEAD_THRESHOLD and player_lives_attr < 1:
                 if replay_mgr:
                     try:
@@ -525,7 +525,7 @@ class GameState(State):
                             break
                 if hit_hazard:
                     if hasattr(g.player, "take_damage"):
-                        g.player.take_damage(20)
+                        g.player.take_damage(1)
                     g.player.hazard_invuln_until = now + 700
 
         # Particle system update remains in renderer (coupled to render order)
@@ -787,13 +787,13 @@ class SkinsState(State):
         self.bg = pygame.image.load("data/images/background-big.png")
         self._ui = UI
         self.settings = settings
-        self.skin_names = list(cm.SKINS)
-        self.skin_paths = list(cm.SKIN_PATHS)
-        if not self.skin_names:
-            self.skin_names = ["Default"]
-            self.skin_paths = ["default"]
-        self.widget = ScrollableListWidget(self.skin_names, visible_rows=6, spacing=50, font_size=30)
-        self.widget.selected_index = max(0, min(self.settings.selected_skin, len(self.skin_names) - 1))
+        self.character_names = list(cm.CHARACTERS)
+        self.character_paths = list(cm.CHARACTER_PATHS)
+        if not self.character_names:
+            self.character_names = ["Default"]
+            self.character_paths = ["default"]
+        self.widget = ScrollableListWidget(self.character_names, visible_rows=6, spacing=50, font_size=30)
+        self.widget.selected_index = max(0, min(self.settings.selected_character, len(self.character_names) - 1))
         self.request_back = False
         self.enter = False
         self.message: str | None = None
@@ -801,12 +801,12 @@ class SkinsState(State):
 
         am = AssetManager.get()
         fallback = am.get_image("entities/player/default/idle/00.png")
-        self.preview_skins = {}
-        for idx, skin_path in enumerate(self.skin_paths):
+        self.preview_characters = {}
+        for idx, character_path in enumerate(self.character_paths):
             try:
-                self.preview_skins[idx] = am.get_image(f"entities/player/{skin_path}/idle/00.png")
+                self.preview_characters[idx] = am.get_image(f"entities/player/{character_path}/idle/00.png")
             except Exception:
-                self.preview_skins[idx] = fallback
+                self.preview_characters[idx] = fallback
 
     def handle_actions(self, actions: Sequence[str]) -> None:
         for a in actions:
@@ -822,10 +822,10 @@ class SkinsState(State):
     def update(self, dt: float) -> None:
         if self.enter:
             idx = self.widget.selected_index
-            self.settings.selected_skin = idx
+            self.settings.selected_character = idx
             self.settings._dirty = True
             self.settings.flush()
-            self.message = self.loc.translate("skins.selected", self.skin_names[idx])
+            self.message = self.loc.translate("characters.selected", self.character_names[idx])
             self.message_timer = 1.0
             self.enter = False
         if self.message_timer > 0:
@@ -836,23 +836,23 @@ class SkinsState(State):
     def render(self, surface: pygame.Surface) -> None:
         UI = self._ui
         UI.render_menu_bg(surface, self.display, self.bg)
-        UI.render_menu_title(surface, self.loc.translate("skins.title"), surface.get_width() // 2, 160)
+        UI.render_menu_title(surface, self.loc.translate("characters.title"), surface.get_width() // 2, 160)
         self.widget.render(surface, surface.get_width() // 2 - 220, 260)
         selected_idx = self.widget.selected_index
-        preview_img = self.preview_skins.get(selected_idx, self.preview_skins.get(0))
+        preview_img = self.preview_characters.get(selected_idx, self.preview_characters.get(0))
         if preview_img is not None:
             scaled = pygame.transform.scale(preview_img, (preview_img.get_width() * 6, preview_img.get_height() * 6))
             surface.blit(scaled, (surface.get_width() - 360, 260))
-        current_idx = max(0, min(self.settings.selected_skin, len(self.skin_names) - 1))
+        current_idx = max(0, min(self.settings.selected_character, len(self.character_names) - 1))
         UI.render_menu_ui_element(
             surface,
-            self.loc.translate("skins.current", self.skin_names[current_idx]),
+            self.loc.translate("characters.current", self.character_names[current_idx]),
             20,
             20,
         )
         UI.render_menu_ui_element(
             surface,
-            self.loc.translate("skins.hint"),
+            self.loc.translate("characters.hint"),
             20,
             surface.get_height() - 60,
         )
@@ -886,12 +886,12 @@ class StoreState(State):
         self.widget = ScrollableListWidget(self.options, visible_rows=5, spacing=50, font_size=30)
         am = AssetManager.get()
         default_preview = am.get_image("entities/player/default/idle/00.png")
-        self.preview_skins = {}
-        for idx, skin_path in enumerate(self.cm.SKIN_PATHS):
+        self.preview_characters = {}
+        for idx, character_path in enumerate(self.cm.CHARACTER_PATHS):
             try:
-                self.preview_skins[idx] = am.get_image(f"entities/player/{skin_path}/idle/00.png")
+                self.preview_characters[idx] = am.get_image(f"entities/player/{character_path}/idle/00.png")
             except Exception:
-                self.preview_skins[idx] = default_preview
+                self.preview_characters[idx] = default_preview
         self.preview_gun = am.get_image("gun.png")
         self.message: str | None = None
         self.message_timer = 0.0
@@ -959,9 +959,9 @@ class StoreState(State):
         )
         UI.render_menu_ui_element(surface, self.loc.translate("menu.back_hint"), 20, surface.get_height() - 40)
         # Live purchase preview based on selected store item.
-        preview_skin_idx = self.settings.selected_skin
-        if sel_name in self.cm.SKINS:
-            preview_skin_idx = self.cm.SKINS.index(sel_name)
+        preview_character_idx = self.settings.selected_character
+        if sel_name in self.cm.CHARACTERS:
+            preview_character_idx = self.cm.CHARACTERS.index(sel_name)
         if 0 <= self.settings.selected_weapon < len(self.cm.WEAPONS):
             preview_weapon = self.cm.WEAPONS[self.settings.selected_weapon]
         else:
@@ -969,7 +969,7 @@ class StoreState(State):
         if sel_name in self.cm.WEAPONS:
             preview_weapon = sel_name
 
-        preview_img = self.preview_skins.get(preview_skin_idx, self.preview_skins[0])
+        preview_img = self.preview_characters.get(preview_character_idx, self.preview_characters[0])
         scaled = pygame.transform.scale(preview_img, (preview_img.get_width() * 4, preview_img.get_height() * 4))
         px = surface.get_width() - 260
         py = 290
@@ -985,7 +985,7 @@ class StoreState(State):
             surface.blit(gun_scaled, (px + 42, py + 34))
         UI.render_menu_ui_element(
             surface,
-            f"Preview: {self.cm.SKINS[preview_skin_idx]} / {preview_weapon}",
+            f"Preview: {self.cm.CHARACTERS[preview_character_idx]} / {preview_weapon}",
             surface.get_width() - 20,
             70,
             "right",
@@ -1017,10 +1017,10 @@ class AccessoriesState(State):
         self.settings = settings
         self.cm = CollectableManager(None)
         self.weapons = list(self.cm.WEAPONS)
-        self.skins = list(self.cm.SKINS)
+        self.characters = list(self.cm.CHARACTERS)
         self.weapon_widget = ScrollableListWidget(self.weapons, visible_rows=4, spacing=50, font_size=30)
-        self.skin_widget = ScrollableListWidget(self.skins, visible_rows=4, spacing=50, font_size=30)
-        self.active_panel = 0  # 0 weapons, 1 skins
+        self.character_widget = ScrollableListWidget(self.characters, visible_rows=4, spacing=50, font_size=30)
+        self.active_panel = 0  # 0 weapons, 1 characters
         self.request_back = False
         self.enter = False
         self.message: str | None = None
@@ -1029,9 +1029,9 @@ class AccessoriesState(State):
     def handle_actions(self, actions: Sequence[str]) -> None:
         for a in actions:
             if a == "menu_up":
-                (self.weapon_widget if self.active_panel == 0 else self.skin_widget).move_up()
+                (self.weapon_widget if self.active_panel == 0 else self.character_widget).move_up()
             elif a == "menu_down":
-                (self.weapon_widget if self.active_panel == 0 else self.skin_widget).move_down()
+                (self.weapon_widget if self.active_panel == 0 else self.character_widget).move_down()
             elif a == "menu_select":
                 self.enter = True
             elif a in ("menu_back", "menu_quit"):
@@ -1050,10 +1050,10 @@ class AccessoriesState(State):
                 else:
                     self.message = self.loc.translate("accessories.locked", name)
             else:
-                idx = self.skin_widget.selected_index
-                name = self.skins[idx]
+                idx = self.character_widget.selected_index
+                name = self.characters[idx]
                 if self.cm.get_amount(name) > 0:
-                    self.settings.selected_skin = idx
+                    self.settings.selected_character = idx
                     self.message = self.loc.translate("accessories.equipped", name)
                 else:
                     self.message = self.loc.translate("accessories.locked", name)
@@ -1069,10 +1069,10 @@ class AccessoriesState(State):
         UI.render_menu_bg(surface, self.display, self.bg)
         UI.render_menu_title(surface, self.loc.translate("accessories.title"), surface.get_width() // 2, 120)
         UI.render_menu_subtitle(surface, self.loc.translate("accessories.weapons"), surface.get_width() // 2 - 350, 260)
-        UI.render_menu_subtitle(surface, self.loc.translate("accessories.skins"), surface.get_width() // 2 + 350, 260)
+        UI.render_menu_subtitle(surface, self.loc.translate("accessories.characters"), surface.get_width() // 2 + 350, 260)
         # Render weapon list
         self.weapon_widget.render(surface, surface.get_width() // 2 - 350, 330)
-        self.skin_widget.render(surface, surface.get_width() // 2 + 350, 330)
+        self.character_widget.render(surface, surface.get_width() // 2 + 350, 330)
         # Padlocks for each visible item
         for i in range(self.weapon_widget.visible_rows):
             idx = self.weapon_widget._scroll_offset + i
@@ -1087,17 +1087,17 @@ class AccessoriesState(State):
                 330 + (i * self.weapon_widget.spacing),
                 0.15,
             )
-        for i in range(self.skin_widget.visible_rows):
-            idx = self.skin_widget._scroll_offset + i
-            if idx >= len(self.skins):
+        for i in range(self.character_widget.visible_rows):
+            idx = self.character_widget._scroll_offset + i
+            if idx >= len(self.characters):
                 break
-            name = self.skins[idx]
+            name = self.characters[idx]
             icon = "data/images/padlock-o.png" if self.cm.is_purchaseable(name) else "data/images/padlock-c.png"
             UI.render_ui_img(
                 surface,
                 icon,
                 surface.get_width() // 2 + 600,
-                330 + (i * self.skin_widget.spacing),
+                330 + (i * self.character_widget.spacing),
                 0.15,
             )
         UI.render_menu_ui_element(surface, self.loc.translate("accessories.coins", self.cm.coins), 20, 20)
@@ -1113,7 +1113,7 @@ class AccessoriesState(State):
         )
         UI.render_menu_ui_element(
             surface,
-            self.loc.translate("accessories.equipped_skin", self.cm.SKINS[self.settings.selected_skin]),
+            self.loc.translate("accessories.equipped_character", self.cm.CHARACTERS[self.settings.selected_character]),
             20,
             60,
         )

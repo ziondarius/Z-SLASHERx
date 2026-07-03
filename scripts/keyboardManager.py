@@ -123,7 +123,31 @@ class KeyboardManager:
         try:
             from scripts.collectableManager import CollectableManager as cm
 
-            return cm.SKIN_PATHS[getattr(self.game.player, "skin", 0)] == "red"
+            return cm.CHARACTER_PATHS[getattr(self.game.player, "character", 0)] == "red"
+        except Exception:
+            return False
+
+    def _is_archer_ninja(self) -> bool:
+        try:
+            from scripts.collectableManager import CollectableManager as cm
+
+            return cm.CHARACTER_PATHS[getattr(self.game.player, "character", 0)] == "archer"
+        except Exception:
+            return False
+
+    def _is_default_ninja(self) -> bool:
+        try:
+            from scripts.collectableManager import CollectableManager as cm
+
+            return cm.CHARACTER_PATHS[getattr(self.game.player, "character", 0)] == "default"
+        except Exception:
+            return False
+
+    def _is_golden_ninja(self) -> bool:
+        try:
+            from scripts.collectableManager import CollectableManager as cm
+
+            return cm.CHARACTER_PATHS[getattr(self.game.player, "character", 0)] == "golden"
         except Exception:
             return False
 
@@ -164,7 +188,18 @@ class KeyboardManager:
                     if self.game.player.jump():
                         self.game.audio.play("jump")
                 if event.key in (pygame.K_s, pygame.K_DOWN):
-                    if self._is_red_ninja() and hasattr(self.game.player, "toggle_enemy_form"):
+                    if self._is_golden_ninja() and hasattr(self.game.player, "toggle_mirror_phantom"):
+                        self.game.player.toggle_mirror_phantom()
+                        self._kbd_slide_held = False
+                    if self._is_archer_ninja() and hasattr(self.game.player, "shoot"):
+                        if self.game.player.shoot():
+                            self._kbd_slide_held = False
+                        else:
+                            self._kbd_slide_held = False
+                    elif self._is_default_ninja() and hasattr(self.game.player, "activate_speed_boost"):
+                        self.game.player.activate_speed_boost()
+                        self._kbd_slide_held = False
+                    elif self._is_red_ninja() and hasattr(self.game.player, "toggle_enemy_form"):
                         self.game.player.toggle_enemy_form()
                         self._kbd_slide_held = False
                     else:
@@ -255,7 +290,13 @@ class KeyboardManager:
                         self.game.audio.play("jump")
 
                 if event.key in (pygame.K_s, pygame.K_DOWN):
-                    if self._is_red_ninja() and hasattr(self.game.player, "toggle_enemy_form"):
+                    if self._is_golden_ninja() and hasattr(self.game.player, "toggle_mirror_phantom"):
+                        self.game.player.toggle_mirror_phantom()
+                    if self._is_archer_ninja() and hasattr(self.game.player, "shoot"):
+                        self.game.player.shoot()
+                    elif self._is_default_ninja() and hasattr(self.game.player, "activate_speed_boost"):
+                        self.game.player.activate_speed_boost()
+                    elif self._is_red_ninja() and hasattr(self.game.player, "toggle_enemy_form"):
                         self.game.player.toggle_enemy_form()
                     else:
                         self.game.player.trigger_slide_animation()
@@ -318,6 +359,12 @@ class KeyboardManager:
         # Slide hold: keyboard S/Down or controller ability button (B)
         ability_held = self._controller_ability_held() or self._kbd_slide_held
         if self._is_red_ninja():
+            ability_held = False
+        if self._is_archer_ninja():
+            ability_held = False
+        if self._is_golden_ninja():
+            ability_held = False
+        if self._is_default_ninja():
             ability_held = False
         if ability_held:
             self.game.player.trigger_slide_animation()

@@ -26,6 +26,7 @@ from scripts.constants import (
     WALL_SLIDE_MAX_SPEED,
 )
 from scripts.effects_util import spawn_hit_sparks
+from scripts.abilities.mirror_phantom import MirrorPhantomAbility
 from scripts.particle import Particle
 from scripts.policy_service import PolicyService
 from scripts.rng_service import RNGService
@@ -67,7 +68,7 @@ class PhysicsEntity:
                     enemy_action = self.action if self.action in {"idle", "run"} else "idle"
                     self.animation = self.game.assets[f"enemy/{enemy_action}"].copy()
                 else:
-                    self.animation = self.game.assets[self.type + "/" + cm.SKIN_PATHS[self.skin] + "/" + self.action].copy()
+                    self.animation = self.game.assets[self.type + "/" + cm.CHARACTER_PATHS[self.character] + "/" + self.action].copy()
 
     # --- Physics step granular methods (Issue 20) ---
     def begin_update(self):
@@ -188,6 +189,9 @@ class Enemy(PhysicsEntity):
         if getattr(self.game.player, "shadow_form_active", False) is True:
             self.set_action("idle")
             return False
+        if getattr(self.game.player, "mirror_phantom_active", False) is True:
+            self.set_action("idle")
+            return False
         # Grapple hold: skip AI while being carried.
         if getattr(self, "grabbed_by_hook", False):
             self.set_action("idle")
@@ -299,6 +303,12 @@ class Enemy(PhysicsEntity):
             fill_w = int(bar_w * (self.health / max(1, self.max_health)))
             pygame.draw.rect(surf, (220, 50, 50), (bar_x, bar_y, fill_w, 4))
 
+        if getattr(self, "golden_marked", False):
+            from scripts.abilities.mirror_phantom import MirrorPhantomAbility
+
+            if hasattr(self.game.player, "mirror_phantom") and isinstance(self.game.player.mirror_phantom, MirrorPhantomAbility):
+                self.game.player.mirror_phantom.apply_mark_visual(surf, self, offset)
+
         if self.flip:
             surf.blit(
                 pygame.transform.flip(self.game.assets["gun"], True, False),
@@ -331,7 +341,7 @@ class Player(PhysicsEntity):
         Internally we migrate to the proper English term 'lives'.
         Legacy attribute 'lifes' provided as property alias for old references.
         """
-        self.skin = 0
+        self.character = 0
         self.enemy_form_active = False
         super().__init__(game, "player", pos, size, id, services=services)
         self.air_time = 0
@@ -349,6 +359,11 @@ class Player(PhysicsEntity):
         self._shadow_particle_tick = 0
         self.shadow_particles: list[dict[str, float | int | list[float]]] = []
         self.hazard_invuln_until = 0
+        self.mirror_phantom_active = False
+        self.mirror_phantom_until = 0
+        self.mirror_phantom_cooldown_until = 0
+        self.mirror_phantom_clone_pos: list[float] = []
+        self.mirror_phantom = MirrorPhantomAbility(self)
         self.jump_power = JUMP_VELOCITY * (1.0 if "PYTEST_CURRENT_TEST" in os.environ else 0.78)
         # Store canonical field _lives and expose property alias.
         self._lives = lives
@@ -366,25 +381,36 @@ class Player(PhysicsEntity):
         self.slide_start_grace_ms = 180
         self.slide_anim_until = 0
         self.slide_hold_active = False
+        self.arrow_cooldown_until = 0
+        self.speed_boost_until = 0
+        self.speed_boost_cooldown_until = 0
+        self.speed_boost_active = False
+        self.speed_boost_particles: list[dict[str, float | int | list[float]]] = []
         self._apply_skin_stats()
 
     def _effect_colors(self):
-        skin_path = "default"
+        character_path = "default"
         try:
-            skin_path = cm.SKIN_PATHS[self.skin]
+            character_path = cm.CHARACTER_PATHS[self.character]
         except Exception:
             pass
-        if skin_path == "red":
+        if character_path == "red":
             return {
                 "mist_particle": (170, 35, 35),
                 "mist_body": (190, 40, 40),
                 "dash_tint": (210, 45, 45),
             }
-        if skin_path == "golden":
+        if character_path == "golden":
             return {
                 "mist_particle": (255, 235, 90),
                 "mist_body": (255, 220, 40),
                 "dash_tint": (255, 230, 70),
+            }
+        if character_path == "archer":
+            return {
+                "mist_particle": (35, 130, 45),
+                "mist_body": (25, 105, 35),
+                "dash_tint": (30, 150, 45),
             }
         return {
             "mist_particle": (15, 15, 15),
@@ -392,13 +418,20 @@ class Player(PhysicsEntity):
             "dash_tint": (20, 20, 20),
         }
 
-    def set_skin(self, skin_index: int) -> None:
-        """Assign skin and immediately refresh current animation."""
+    def _boost_colors(self):
+        return {
+            "particle": (62, 30, 90),
+            "trail": (32, 16, 46),
+            "body": (18, 12, 26),
+        }
+
+    def set_character(self, character_index: int) -> None:
+        """Assign character and immediately refresh current animation."""
         try:
-            max_idx = max(0, len(cm.SKIN_PATHS) - 1)
-            self.skin = max(0, min(int(skin_index), max_idx))
+            max_idx = max(0, len(cm.CHARACTER_PATHS) - 1)
+            self.character = max(0, min(int(character_index), max_idx))
         except Exception:
-            self.skin = 0
+            self.character = 0
         self._apply_skin_stats()
         if not self._can_use_enemy_form():
             self.enemy_form_active = False
@@ -407,8 +440,12 @@ class Player(PhysicsEntity):
         self.action = ""
         self.set_action(current_action)
 
+    def set_skin(self, skin_index: int) -> None:
+        """Backward-compatible alias for `set_character`."""
+        self.set_character(skin_index)
+
     def _apply_skin_stats(self) -> None:
-        """Apply per-skin movement/jump/mist tuning."""
+        """Apply per-character movement/jump/mist tuning."""
         base_jump = JUMP_VELOCITY * (1.0 if "PYTEST_CURRENT_TEST" in os.environ else 0.78)
         self.move_speed = 2.2
         self.jump_power = base_jump
@@ -421,10 +458,10 @@ class Player(PhysicsEntity):
 
     def _can_use_enemy_form(self) -> bool:
         try:
-            skin_path = cm.SKIN_PATHS[self.skin]
+            character_path = cm.CHARACTER_PATHS[self.character]
         except Exception:
-            skin_path = "default"
-        return skin_path == "red"
+            character_path = "default"
+        return character_path == "red"
 
     def toggle_enemy_form(self) -> bool:
         if not self._can_use_enemy_form():
@@ -435,6 +472,9 @@ class Player(PhysicsEntity):
             self.shadow_form_active = False
             self.shadow_form_ms = self.shadow_form_max_ms
             self.dashing = 0
+            self.speed_boost_active = False
+            self.speed_boost_until = 0
+            self.speed_boost_cooldown_until = 0
             self.slide_ability_active = False
             self.slide_hold_active = False
             self.slide_anim_until = 0
@@ -466,24 +506,52 @@ class Player(PhysicsEntity):
         self._lives = value
 
     def shoot(self):
-        # Player bullets are disabled. Keep the API so old callers do not break.
-        return False
+        character_path = "default"
+        try:
+            character_path = cm.CHARACTER_PATHS[self.character]
+        except Exception:
+            pass
+        if self.enemy_form_active:
+            return False
+        if character_path != "archer":
+            # Player bullets are disabled for non-archer skins. Keep the API.
+            return False
+        now = pygame.time.get_ticks()
+        if now < self.arrow_cooldown_until:
+            return False
+        direction = -6.5 if self.flip else 6.5
+        spawn_x = self.rect().centerx + (7 * (-1 if self.flip else 1))
+        spawn_y = self.rect().centery
+        if self.services:
+            self.services.projectiles.spawn(spawn_x, spawn_y, direction, "player", kind="arrow")
+            self.services.play("shoot")
+        else:
+            self.game.projectiles.spawn(spawn_x, spawn_y, direction, "player", kind="arrow")
+            self.game.audio.play("shoot")
+        self.arrow_cooldown_until = now + 3000
+        return True
 
     def take_damage(self, amount: int):
         if self.game.dead:
             return
-        self.health = max(0, self.health - int(amount))
-        if self.health <= 0:
+        if self.mirror_phantom.active:
+            return
+        # Lives are heart-based: every damaging hit removes exactly one heart.
+        if self.lives > 1:
             self.lives -= 1
             self.health = self.health_max
-            self.game.dead += 1
-            self.game.screenshake = max(16, self.game.screenshake)
+            self.game.screenshake = max(12, self.game.screenshake)
+            return
+        self.lives = 0
+        self.health = 0
+        self.game.dead += 1
+        self.game.screenshake = max(16, self.game.screenshake)
 
     def set_grapple_aim(self, world_pos):
         self.grapple_aim_world = [float(world_pos[0]), float(world_pos[1])]
 
     def set_shadow_form(self, active: bool):
-        if self.enemy_form_active:
+        if self.enemy_form_active or self.mirror_phantom.active:
             self._shadow_requested = False
             self.shadow_form_active = False
             self.shadow_form_ms = self.shadow_form_max_ms
@@ -495,10 +563,50 @@ class Player(PhysicsEntity):
 
     def _can_use_slide_ability(self) -> bool:
         try:
-            skin_path = cm.SKIN_PATHS[self.skin]
+            character_path = cm.CHARACTER_PATHS[self.character]
         except Exception:
-            skin_path = "default"
-        return skin_path == "default"
+            character_path = "default"
+        return character_path == "default"
+
+    def _can_use_speed_boost(self) -> bool:
+        try:
+            character_path = cm.CHARACTER_PATHS[self.character]
+        except Exception:
+            character_path = "default"
+        return character_path == "default"
+
+    def _can_use_mirror_phantom(self) -> bool:
+        return self.mirror_phantom.is_golden() and not self.enemy_form_active
+
+    def toggle_mirror_phantom(self) -> bool:
+        if self.mirror_phantom.active:
+            return self.mirror_phantom.cancel()
+        return self.mirror_phantom.start(duration_ms=4000)
+
+    def get_mirror_phantom_target_pos(self):
+        return self.mirror_phantom.target_pos()
+
+    @property
+    def skin(self):
+        """Backward-compatible alias for `character`."""
+        return self.character
+
+    @skin.setter
+    def skin(self, value):
+        self.character = value
+
+    def activate_speed_boost(self, duration_ms: int = 5000) -> bool:
+        if self.enemy_form_active or not self._can_use_speed_boost():
+            return False
+        now = pygame.time.get_ticks()
+        if now < self.speed_boost_cooldown_until:
+            return False
+        self.speed_boost_active = True
+        self.speed_boost_until = max(self.speed_boost_until, now + max(50, int(duration_ms)))
+        self.speed_boost_cooldown_until = self.speed_boost_until + 5000
+        self.action = ""
+        self.set_action("run" if abs(self.velocity[0]) > 0.1 else "idle")
+        return True
 
     def trigger_slide_animation(self, duration_ms: int = 2000) -> None:
         if self.enemy_form_active or not self._can_use_slide_ability():
@@ -572,6 +680,9 @@ class Player(PhysicsEntity):
         if self.enemy_form_active and not self._can_use_enemy_form():
             self.enemy_form_active = False
             self._apply_skin_stats()
+        if self.speed_boost_active and now >= self.speed_boost_until:
+            self.speed_boost_active = False
+            self.speed_boost_until = 0
         if self.slide_ability_active:
             if now >= self.slide_ability_until:
                 self._end_slide_ability()
@@ -647,6 +758,12 @@ class Player(PhysicsEntity):
                 )
             return
 
+        is_boost_moving = abs(movement[0]) > 0.01 or abs(self.velocity[0]) > 0.1
+        if self.speed_boost_active:
+            self.move_speed = 4.8
+        else:
+            self._apply_skin_stats()
+
         if self.enemy_form_active:
             # Match the enemy patrol pace more closely in disguise.
             self.move_speed = self._enemy_move_speed() * 1.25
@@ -675,6 +792,11 @@ class Player(PhysicsEntity):
             effective_movement = (movement[0], movement[1])
 
         super().update(tilemap, movement=(effective_movement[0] * self.move_speed, effective_movement[1]))
+        self.mirror_phantom.update()
+        if self.mirror_phantom.active:
+            for enemy in getattr(self.game, "enemies", []):
+                if getattr(enemy, "alive", True) and self.rect().colliderect(enemy.rect()):
+                    self.mirror_phantom.mark_enemy(enemy)
         ended_by_wall_or_edge = False
         # If we are not grounded anymore, slide ability must end immediately.
         in_slide_grace = self.slide_ability_active and (now - self.slide_ability_started_at) < self.slide_start_grace_ms
@@ -712,6 +834,47 @@ class Player(PhysicsEntity):
         if self.collisions["down"]:
             self.air_time = 0
             self.jumps = 2
+
+        if self.speed_boost_active:
+            boost_dir = 0
+            if abs(movement[0]) > 0.01:
+                boost_dir = -1 if movement[0] < 0 else 1
+            elif abs(self.velocity[0]) > 0.1:
+                boost_dir = -1 if self.velocity[0] < 0 else 1
+            elif self.flip:
+                boost_dir = 0
+            boost_colors = self._boost_colors()
+            for _ in range(2):
+                behind_x = self.rect().centerx - (boost_dir * 5)
+                if boost_dir == 0:
+                    behind_x = self.rect().centerx + rng.uniform(-1.5, 1.5)
+                self.speed_boost_particles.append(
+                    {
+                        "pos": [
+                            behind_x + rng.uniform(-2, 2),
+                            self.rect().centery + rng.uniform(-3, 3),
+                        ],
+                        "vel": [
+                            (-boost_dir * 0.35) + rng.uniform(-0.08, 0.08),
+                            rng.uniform(-0.06, 0.06),
+                        ],
+                        "base_r": rng.randint(2, 3),
+                        "r": rng.randint(2, 3),
+                        "ttl": 18,
+                        "color": boost_colors["particle"],
+                    }
+                )
+        for p in self.speed_boost_particles[:]:
+            p["ttl"] -= 1
+            p["pos"][0] += p["vel"][0]
+            p["pos"][1] += p["vel"][1]
+            if self.speed_boost_active and is_boost_moving:
+                dist = math.hypot(p["pos"][0] - self.rect().centerx, p["pos"][1] - self.rect().centery)
+                p["r"] = max(1, int(p.get("base_r", 2) - dist / 18))
+            else:
+                p["r"] = int(p.get("base_r", 2))
+            if p["ttl"] <= 0:
+                self.speed_boost_particles.remove(p)
 
         self.wall_slide = False
         if (self.collisions["right"] or self.collisions["left"]) and self.air_time > 4:
@@ -792,6 +955,14 @@ class Player(PhysicsEntity):
         from scripts.collectableManager import CollectableManager as cm
 
         colors = self._effect_colors()
+        boost_colors = self._boost_colors()
+        for p in self.speed_boost_particles:
+            pygame.draw.circle(
+                surf,
+                p.get("color", boost_colors["particle"]),
+                (int(p["pos"][0] - offset[0]), int(p["pos"][1] - offset[1])),
+                int(p["r"]),
+            )
         for p in self.shadow_particles:
             pygame.draw.circle(
                 surf,
@@ -808,14 +979,18 @@ class Player(PhysicsEntity):
                 7,
             )
             return
+        if self.mirror_phantom.active:
+            self.mirror_phantom.render_clone(surf, offset)
         # Red slide frames sit slightly high; nudge down only during slide action.
         y_adjust = 0
         try:
-            skin_path = cm.SKIN_PATHS[self.skin]
+            character_path = cm.CHARACTER_PATHS[self.character]
         except Exception:
-            skin_path = "default"
-        if self.action == "slide" and skin_path == "red":
+            character_path = "default"
+        if self.action == "slide" and character_path == "red":
             y_adjust = 5
+        if self.speed_boost_active:
+            y_adjust = 0
         if self.action == "run":
             try:
                 frame_count = max(1, len(self.animation.images))
@@ -827,11 +1002,15 @@ class Player(PhysicsEntity):
             except Exception:
                 pass
         if abs(self.dashing) <= DASH_MIN_ACTIVE_ABS:
-            if y_adjust == 0:
+            if y_adjust == 0 and not self.mirror_phantom.active:
                 super().render(surf, offset=offset)
             else:
+                player_img = pygame.transform.flip(self.animation.img(), self.flip, False)
+                if self.mirror_phantom.active:
+                    player_img = player_img.copy()
+                    player_img.set_alpha(110)
                 surf.blit(
-                    pygame.transform.flip(self.animation.img(), self.flip, False),
+                    player_img,
                     (
                         self.pos[0] - offset[0] + self.anim_offset[0],
                         self.pos[1] - offset[1] + self.anim_offset[1] + y_adjust,
@@ -887,7 +1066,7 @@ class Player(PhysicsEntity):
             return True
 
     def dash(self):
-        if self.enemy_form_active or self.slide_ability_active:
+        if self.enemy_form_active or self.slide_ability_active or self.mirror_phantom.active:
             return
         if not self.dashing:
             if self.services:

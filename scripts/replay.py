@@ -57,7 +57,7 @@ class ReplayData:
     """Full replay container (Inputs + Snapshots)."""
 
     level: str
-    skin: str
+    character: str
     seed: int
     duration_frames: int
     map_sig: str = ""
@@ -71,7 +71,8 @@ class ReplayData:
         return {
             "version": REPLAY_VERSION,
             "level": self.level,
-            "skin": self.skin,
+            "skin": self.character,
+            "character": self.character,
             "seed": self.seed,
             "map_sig": self.map_sig,
             "duration_frames": self.duration_frames,
@@ -83,7 +84,7 @@ class ReplayData:
     def from_json(cls, data: dict) -> "ReplayData":
         return cls(
             level=str(data.get("level", "0")),
-            skin=str(data.get("skin", "default")),
+            character=str(data.get("character", data.get("skin", "default"))),
             seed=int(data.get("seed", 0)),
             map_sig=str(data.get("map_sig", "")),
             duration_frames=int(data.get("duration_frames", 0)),
@@ -96,8 +97,8 @@ class ReplayData:
 class ReplayRecording:
     """Active recording session."""
 
-    def __init__(self, level: str, skin: str, seed: int, map_sig: str):
-        self.data = ReplayData(level=level, skin=skin, seed=seed, map_sig=map_sig, duration_frames=0)
+    def __init__(self, level: str, character: str, seed: int, map_sig: str):
+        self.data = ReplayData(level=level, character=character, seed=seed, map_sig=map_sig, duration_frames=0)
 
     def capture_frame(
         self, tick: int, player: Any, inputs: List[str], snapshot: Optional[Any] = None, optimized: bool = True
@@ -135,12 +136,12 @@ class ReplayRecording:
 class GhostPlayer(Player):
     """A player entity that doesn't spawn effects but simulates movement."""
 
-    def __init__(self, game, pos, size, id, skin_idx=0):
+    def __init__(self, game, pos, size, id, character_idx=0):
         # Initialize base Player but suppress heavy init if needed
         # We need it to behave exactly like Player for physics
         # lives=1, respawn_pos=pos provided to satisfy Player.__init__ signature
         super().__init__(game, pos, size, id, lives=1, respawn_pos=list(pos))
-        self.skin = skin_idx
+        self.character = character_idx
         # Persistent input state flags
         self.input_left = False
         self.input_right = False
@@ -181,11 +182,11 @@ class ReplayGhost:
         try:
             from scripts.collectableManager import CollectableManager as CM
 
-            skin_idx = CM.SKIN_PATHS.index(data.skin)
+            character_idx = CM.CHARACTER_PATHS.index(data.character)
         except ValueError:
-            skin_idx = 0
+            character_idx = 0
 
-        self.entity = GhostPlayer(self.game, start_pos, (8, 15), 999, skin_idx)
+        self.entity = GhostPlayer(self.game, start_pos, (8, 15), 999, character_idx)
         self.input_map = {entry["tick"]: entry["inputs"] for entry in self.data.inputs}
         self._tint_cache: Dict[tuple, pygame.Surface] = {}
 
@@ -310,10 +311,10 @@ class ReplayManager:
         except Exception:
             pass
 
-        skin = self._get_skin(player)
+        character = self._get_character(player)
 
         if self._ghosts_enabled():
-            self.recording = ReplayRecording(level_str, skin, seed, current_map_sig)
+            self.recording = ReplayRecording(level_str, character, seed, current_map_sig)
             self.tick_counter = 0
 
             self.best_data = self._load(level_str, "best")
@@ -401,14 +402,18 @@ class ReplayManager:
     def _ghosts_enabled(self) -> bool:
         return bool(getattr(global_settings, "ghost_enabled", True))
 
-    def _get_skin(self, player) -> str:
+    def _get_character(self, player) -> str:
         try:
             from scripts.collectableManager import CollectableManager as CM
 
-            idx = int(getattr(player, "skin", 0))
-            return CM.SKIN_PATHS[idx] if 0 <= idx < len(CM.SKIN_PATHS) else "default"
+            idx = int(getattr(player, "character", 0))
+            return CM.CHARACTER_PATHS[idx] if 0 <= idx < len(CM.CHARACTER_PATHS) else "default"
         except Exception:
             return "default"
+
+    def _get_skin(self, player) -> str:
+        """Backward-compatible alias for character lookup."""
+        return self._get_character(player)
 
 
 __all__ = ["ReplayManager", "ReplayRecording", "ReplayGhost", "ReplayData", "FrameSample"]

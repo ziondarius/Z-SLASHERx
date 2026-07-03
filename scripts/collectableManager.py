@@ -20,7 +20,7 @@ HEART_PICKUP_SIZE = 12
 HEART_PICKUP_HITBOX = 16
 
 
-def _discover_skin_paths() -> List[str]:
+def _discover_character_paths() -> List[str]:
     base_dir = "data/images/entities/player"
     discovered: List[str] = []
     if os.path.isdir(base_dir):
@@ -39,7 +39,7 @@ def _discover_skin_paths() -> List[str]:
     return discovered
 
 
-def _skin_label(path_name: str) -> str:
+def _character_label(path_name: str) -> str:
     fixed = {
         "default": "Default",
         "red": "Red Ninja",
@@ -85,8 +85,11 @@ class CollectableManager:
 
     NOT_PURCHASEABLES: set[str] = set()
 
-    SKIN_PATHS = _discover_skin_paths()
-    SKINS = [_skin_label(path) for path in SKIN_PATHS]
+    CHARACTER_PATHS = _discover_character_paths()
+    CHARACTERS = [_character_label(path) for path in CHARACTER_PATHS]
+    # Backward-compatibility aliases while code migrates from skin -> character.
+    SKIN_PATHS = CHARACTER_PATHS
+    SKINS = CHARACTERS
 
     WEAPONS = [
         "Default",
@@ -257,8 +260,9 @@ class CollectableManager:
             heart_rect = self.heart_pickup["rect"]
             if heart_rect is not None and heart_rect.colliderect(player_rect):
                 player = getattr(self.game, "player", None)
-                if player is not None and player.health < player.health_max:
-                    player.health = min(player.health_max, player.health + HEART_HEAL_AMOUNT)
+                if player is not None and getattr(player, "lives", 0) < 4:
+                    player.lives = min(4, int(getattr(player, "lives", 0)) + 1)
+                    player.health = player.health_max
                 self.game.audio.play("collect")
                 self.heart_pickup["active"] = False
                 self.heart_pickup["next_spawn"] = now + HEART_RESPAWN_MS

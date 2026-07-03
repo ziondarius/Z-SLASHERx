@@ -27,7 +27,7 @@ class AudioPort(Protocol):
 
 
 class ProjectilePort(Protocol):
-    def spawn(self, x: float, y: float, vx: float, owner: str): ...
+    def spawn(self, x: float, y: float, vx: float, owner: str, kind: str = "projectile"): ...
 
 
 class ParticlePort(Protocol):
@@ -59,8 +59,8 @@ class ServiceContainer:
     def play(self, name: str, loops: int = 0) -> None:  # pragma: no cover - simple
         self.audio.play(name, loops=loops)
 
-    def spawn_projectile(self, x: float, y: float, vx: float, owner: str):  # pragma: no cover
-        self.projectiles.spawn(x, y, vx, owner)
+    def spawn_projectile(self, x: float, y: float, vx: float, owner: str, kind: str = "projectile"):  # pragma: no cover
+        self.projectiles.spawn(x, y, vx, owner, kind=kind)
 
     def emit_particle(self, p_type: str, pos: Tuple[float, float], velocity=(0, 0), frame: int = 0):  # pragma: no cover
         if self.particles:

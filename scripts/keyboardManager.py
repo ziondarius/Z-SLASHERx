@@ -188,6 +188,9 @@ class KeyboardManager:
                     if self.game.player.jump():
                         self.game.audio.play("jump")
                 if event.key in (pygame.K_s, pygame.K_DOWN):
+                    if getattr(self.game.player, "shadow_form_active", False):
+                        self._kbd_slide_held = False
+                        continue
                     if self._is_golden_ninja() and hasattr(self.game.player, "toggle_mirror_phantom"):
                         self.game.player.toggle_mirror_phantom()
                         self._kbd_slide_held = False
@@ -229,11 +232,15 @@ class KeyboardManager:
                 if getattr(event, "button", None) in self._dash_trigger_buttons:
                     self.game.player.dash()
                 if getattr(event, "button", None) in self._ability_buttons and not self._is_red_ninja():
+                    if getattr(self.game.player, "shadow_form_active", False):
+                        continue
                     self.game.player.trigger_slide_animation()
             if event.type == pygame.CONTROLLERBUTTONDOWN:
                 btn = getattr(event, "button", None)
                 # SDL gamecontroller mapping fallback for ability button.
                 if btn in self._ability_buttons and not self._is_red_ninja():
+                    if getattr(self.game.player, "shadow_form_active", False):
+                        continue
                     self.game.player.trigger_slide_animation()
                 if btn == 9:
                     self._ctrl_lb_down = True
@@ -290,6 +297,8 @@ class KeyboardManager:
                         self.game.audio.play("jump")
 
                 if event.key in (pygame.K_s, pygame.K_DOWN):
+                    if getattr(self.game.player, "shadow_form_active", False):
+                        continue
                     if self._is_golden_ninja() and hasattr(self.game.player, "toggle_mirror_phantom"):
                         self.game.player.toggle_mirror_phantom()
                     if self._is_archer_ninja() and hasattr(self.game.player, "shoot"):

@@ -309,6 +309,18 @@ class Enemy(PhysicsEntity):
             if hasattr(self.game.player, "mirror_phantom") and isinstance(self.game.player.mirror_phantom, MirrorPhantomAbility):
                 self.game.player.mirror_phantom.apply_mark_visual(surf, self, offset)
 
+        alert_icon = getattr(self, "enemy_alert_icon", None)
+        if alert_icon and alert_icon in self.game.assets:
+            icon = self.game.assets[alert_icon]
+            r = self.rect()
+            surf.blit(
+                icon,
+                (
+                    r.centerx - icon.get_width() // 2 - offset[0],
+                    r.top - icon.get_height() - 2 - offset[1],
+                ),
+            )
+
         if self.flip:
             surf.blit(
                 pygame.transform.flip(self.game.assets["gun"], True, False),

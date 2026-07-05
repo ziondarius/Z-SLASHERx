@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 VERSION_NAME = "Character Edition"
-VERSION_MAJOR = 1
+VERSION_MAJOR = 2
 VERSION_MINOR = 0
 
 

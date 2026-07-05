@@ -105,6 +105,8 @@ class Game:
             "gun": am.get_image("gun.png"),
             "arrow": am.get_image("arrow.png"),
             "projectile": am.get_image("projectile.png"),
+            "exclamation_mark": pygame.transform.scale(am.get_image("exclamation_mark.png"), (10, 10)),
+            "question_mark": pygame.transform.scale(am.get_image("question_mark.png"), (10, 10)),
         }
         # Load animations for all discovered player characters.
         for character_path in CollectableManager.CHARACTER_PATHS:

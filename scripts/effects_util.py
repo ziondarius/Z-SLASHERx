@@ -61,4 +61,26 @@ def spawn_projectile_sparks(game, pos: Tuple[float, float], direction: float):
         )
 
 
-__all__ = ["spawn_hit_sparks", "spawn_projectile_sparks"]
+def spawn_sword_sparks(game, center: Tuple[float, float], count: int = 8):
+    """Yellow sword clash sparks for the swordsman enemy."""
+    rng = RNGService.get()
+    for _ in range(count):
+        angle = rng.random() * math.pi * 2
+        speed = 1.6 + rng.random() * 1.8
+        game.sparks.append(Spark(center, angle, speed))
+        game.particles.append(
+            Particle(
+                game,
+                "particle",
+                center,
+                velocity=[
+                    math.cos(angle + math.pi) * speed * 0.35,
+                    math.sin(angle + math.pi) * speed * 0.35,
+                ],
+                frame=rng.randint(0, 7),
+                tint=(255, 230, 60),
+            )
+        )
+
+
+__all__ = ["spawn_hit_sparks", "spawn_projectile_sparks", "spawn_sword_sparks"]

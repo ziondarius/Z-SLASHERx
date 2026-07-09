@@ -536,8 +536,8 @@ class GameState(State):
 
         if not hasattr(self, "_renderer"):
             # Lazy construct; avoids cost during test discovery when GameState unused.
-            # Use renderer's own performance HUD (app-level HUD removed to avoid duplication).
-            self._renderer = Renderer(show_perf=True)
+            # Keep the gameplay HUD clean; performance overlay is disabled for normal play.
+            self._renderer = Renderer(show_perf=False)
         self._renderer.render(self._game, surface)
 
 

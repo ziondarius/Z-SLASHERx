@@ -112,6 +112,12 @@ class ProjectileSystem:
                 rect = pygame.Rect(proj["pos"][0], proj["pos"][1], 4, 4)
                 for enemy in enemies.copy():
                     if enemy.rect().colliderect(rect):
+                        if getattr(enemy, "deflect_projectiles", False):
+                            proj["owner"] = "enemy"
+                            proj["vel"][0] = -proj["vel"][0] * 1.1
+                            proj["pos"][0] += 4 if proj["vel"][0] > 0 else -4
+                            spawn_projectile_sparks(self.game, proj["pos"], proj["vel"][0])
+                            break
                         if proj in self._projectiles:
                             self._projectiles.remove(proj)
                         self.game.screenshake = max(16, self.game.screenshake)

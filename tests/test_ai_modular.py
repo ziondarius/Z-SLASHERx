@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 from scripts.ai.core import Policy, PolicyService
-from scripts.ai.behaviors import PatrolPolicy, ShooterPolicy, ScriptedEnemyPolicy
+from scripts.ai.behaviors import PatrolPolicy, ShooterPolicy, ScriptedEnemyPolicy, SwordsmanPolicy
 from scripts.entities import Enemy
 
 
@@ -97,7 +97,7 @@ class TestModularAI(unittest.TestCase):
         self.assertTrue(getattr(entity, "enemy_alert_active", False))
         self.assertEqual(getattr(entity, "enemy_alert_icon", None), "exclamation_mark")
 
-        with unittest.mock.patch("scripts.ai.behaviors.pygame.time.get_ticks", return_value=1100):
+        with unittest.mock.patch("scripts.ai.behaviors.pygame.time.get_ticks", return_value=2000):
             decision = policy.decide(entity, self.mock_game)
 
         self.assertEqual(decision["shoot"], True)
@@ -123,6 +123,47 @@ class TestModularAI(unittest.TestCase):
 
         self.assertFalse(getattr(entity, "enemy_alert_active", True))
         self.assertEqual(getattr(entity, "enemy_alert_icon", "x"), None)
+
+    def test_swordsman_policy(self):
+        policy = SwordsmanPolicy()
+        entity = MagicMock()
+        entity.game = self.mock_game
+        entity.flip = False
+        entity.rect.return_value.centerx = 100
+        entity.rect.return_value.centery = 100
+        entity.rect.return_value.width = 16
+        entity.rect.return_value.bottom = 116
+        entity.collisions = {"left": False, "right": False, "down": True}
+        entity.swordsman_alert_active = False
+        entity.swordsman_alert_lost_since = 0
+        entity.enemy_alert_icon = None
+        entity.sword_swing_active = False
+        entity.sword_swing_until = 0
+        entity.sword_swing_cooldown_until = 0
+        entity.sword_swing_hit = False
+
+        self.mock_game.player.rect.return_value.centerx = 130
+        self.mock_game.player.rect.return_value.centery = 100
+
+        def solid_check_open(pos):
+            x, y = pos
+            return y >= 110
+
+        self.mock_game.tilemap.solid_check.side_effect = solid_check_open
+
+        with unittest.mock.patch("scripts.ai.behaviors.pygame.time.get_ticks", return_value=1000):
+            decision = policy.decide(entity, self.mock_game)
+
+        self.assertTrue(getattr(entity, "swordsman_alert_active", False))
+        self.assertIn("movement", decision)
+        self.assertIn("jump_velocity", decision)
+
+        self.mock_game.player.rect.return_value.centerx = 140
+        self.mock_game.player.rect.return_value.centery = 70
+        with unittest.mock.patch("scripts.ai.behaviors.pygame.time.get_ticks", return_value=2000):
+            decision = policy.decide(entity, self.mock_game)
+
+        self.assertTrue(decision["jump"])
 
     def test_chaser_policy(self):
         from scripts.ai.behaviors import ChaserPolicy

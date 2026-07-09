@@ -92,8 +92,12 @@ class Game:
             "player": am.get_image("entities/player.png"),
             "background": am.get_image("background-big.png"),
             "clouds": am.get_image_frames("clouds"),
-            "enemy/idle": am.get_animation("entities/enemy/idle", img_dur=6),
-            "enemy/run": am.get_animation("entities/enemy/run", img_dur=4),
+            "enemy/idle": am.get_animation("entities/enemy/default/idle", img_dur=6),
+            "enemy/run": am.get_animation("entities/enemy/default/run", img_dur=4),
+            "enemy/swordsman/idle": am.get_animation("entities/enemy/swordsman/idle", img_dur=6),
+            "enemy/swordsman/run": am.get_animation("entities/enemy/swordsman/run", img_dur=4),
+            "enemy/swordsman/jump": am.get_animation("entities/enemy/swordsman/jump", img_dur=6),
+            "sword": pygame.transform.scale(am.get_image("sword.png"), (9, 12)),
             "particle/leaf": am.get_animation("particles/leaf", img_dur=20, loop=False),
             "particle/particle": am.get_animation("particles/particle", img_dur=6, loop=False),
             "coin": am.get_animation("collectables/coin", img_dur=6),
@@ -165,7 +169,7 @@ class Game:
         # Performance HUD (shared abstraction with modern renderer)
         from scripts.perf_hud import PerformanceHUD  # local import to avoid early cost if unused
 
-        self.perf_hud = PerformanceHUD(enabled=True)
+        self.perf_hud = PerformanceHUD(enabled=False)
 
     # Backward compatibility shim for old calls (will be removed):
     def update_sound_volumes(self):  # pragma: no cover - compatibility
@@ -271,11 +275,27 @@ class Game:
                 else:
                     self.enemies.append(Enemy(self, spawner["pos"], (8, 15), enemy_id))
                     enemy_id += 1
+
             self.saves = 1
 
             # Set the current player if there are any players
             if self.players:
                 self.player = self.players[self.playerID]
+                if map_id == 0:
+                    try:
+                        swordsman_pos = [self.player.respawn_pos[0] + 48, self.player.respawn_pos[1]]
+                        swordsman = Enemy(self, swordsman_pos, (8, 15), enemy_id, policy="swordsman")
+                        swordsman.sprite_set = "swordsman"
+                        swordsman.weapon_kind = "sword"
+                        swordsman.deflect_projectiles = True
+                        swordsman.sword_swing_active = False
+                        swordsman.sword_swing_until = 0
+                        swordsman.sword_swing_cooldown_until = 0
+                        swordsman.sword_swing_hit = False
+                        self.enemies.append(swordsman)
+                        enemy_id += 1
+                    except Exception:
+                        pass
             # Moving damage boxes removed.
         self._apply_boss_for_level()
         # END LOAD LEVEL

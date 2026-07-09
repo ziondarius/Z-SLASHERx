@@ -21,11 +21,13 @@ from scripts.constants import (
     HORIZONTAL_FRICTION,
     JUMP_VELOCITY,
     MAX_FALL_SPEED,
+    SWORDSMAN_ATTACK_RANGE,
+    SWORDSMAN_SWING_DURATION,
     WALL_JUMP_HORIZONTAL_VEL,
     WALL_JUMP_VERTICAL_VEL,
     WALL_SLIDE_MAX_SPEED,
 )
-from scripts.effects_util import spawn_hit_sparks
+from scripts.effects_util import spawn_hit_sparks, spawn_sword_sparks
 from scripts.abilities.mirror_phantom import MirrorPhantomAbility
 from scripts.particle import Particle
 from scripts.policy_service import PolicyService
@@ -163,6 +165,7 @@ class Enemy(PhysicsEntity):
     def __init__(
         self, game, pos, size=(15, 8), id=0, services: ServiceContainer | None = None, policy: str = "scripted_enemy"
     ):
+        self.sprite_set = "default"
         super().__init__(game, "enemy", pos, size, id, services=services)
         self.walking = 0
         self.policy = PolicyService.get(policy)
@@ -170,6 +173,24 @@ class Enemy(PhysicsEntity):
         self.max_health = 1
         self.health = 1
         self.boss_cooldown = 0
+        self.weapon_kind = "gun"
+        self.deflect_projectiles = False
+        self.sword_swing_active = False
+        self.sword_swing_until = 0
+        self.sword_swing_cooldown_until = 0
+        self.sword_swing_hit = False
+
+    def set_action(self, action):
+        if action == self.action:
+            return
+        self.action = action
+        sprite_key = f"enemy/{self.sprite_set}/{self.action}"
+        if sprite_key in self.game.assets:
+            self.animation = self.game.assets[sprite_key].copy()
+        else:
+            fallback_key = f"enemy/{self.action}"
+            if fallback_key in self.game.assets:
+                self.animation = self.game.assets[fallback_key].copy()
 
     def make_boss(self):
         self.is_boss = True
@@ -210,6 +231,14 @@ class Enemy(PhysicsEntity):
         rng = RNGService.get()
         # Delegate behavior to policy
         decision = self.policy.decide(self, self.game)
+        now = pygame.time.get_ticks()
+        if self.weapon_kind == "sword":
+            if decision.get("swing"):
+                self.sword_swing_active = True
+                self.sword_swing_until = max(self.sword_swing_until, now + SWORDSMAN_SWING_DURATION)
+                self.sword_swing_hit = False
+            if self.sword_swing_active and now >= self.sword_swing_until:
+                self.sword_swing_active = False
 
         # Apply movement intent
         intent_movement = decision.get("movement", (0, 0))
@@ -222,7 +251,7 @@ class Enemy(PhysicsEntity):
 
         # Apply jump intent
         if decision.get("jump") and self.collisions["down"]:
-            self.velocity[1] = JUMP_VELOCITY
+            self.velocity[1] = decision.get("jump_velocity", JUMP_VELOCITY)
 
         # Apply shooting intent
         if decision.get("shoot") and not getattr(self.game.player, "enemy_form_active", False):
@@ -247,6 +276,26 @@ class Enemy(PhysicsEntity):
                     "enemy",
                 )
 
+        if self.weapon_kind == "sword" and self.sword_swing_active:
+            player_rect = self.game.player.rect()
+            attack_rect = self.rect().copy()
+            attack_rect.y -= 1
+            attack_rect.height += 2
+            if self.flip:
+                attack_rect.x -= SWORDSMAN_ATTACK_RANGE
+                attack_rect.width = SWORDSMAN_ATTACK_RANGE + attack_rect.width // 2
+            else:
+                attack_rect.width = SWORDSMAN_ATTACK_RANGE + attack_rect.width // 2
+            if attack_rect.colliderect(player_rect):
+                if abs(self.game.player.dashing) >= DASH_MIN_ACTIVE_ABS:
+                    if not self.sword_swing_hit:
+                        spawn_sword_sparks(self.game, self.rect().center)
+                        self.sword_swing_hit = True
+                elif not self.sword_swing_hit:
+                    self.game.player.take_damage(1)
+                    self.sword_swing_hit = True
+                    spawn_sword_sparks(self.game, self.rect().center)
+
         # Boss-only special ability: tri-shot volley every cooldown cycle.
         if self.is_boss:
             self.boss_cooldown -= 1
@@ -266,7 +315,14 @@ class Enemy(PhysicsEntity):
 
         super().update(tilemap, movement=combined_movement)
 
-        if combined_movement[0] != 0:
+        if self.weapon_kind == "sword":
+            if not self.collisions["down"] or decision.get("jump"):
+                self.set_action("jump")
+            elif combined_movement[0] != 0:
+                self.set_action("run")
+            else:
+                self.set_action("idle")
+        elif combined_movement[0] != 0:
             self.set_action("run")
         else:
             self.set_action("idle")
@@ -274,6 +330,10 @@ class Enemy(PhysicsEntity):
         # Dash kill & projectile collision checks
         if abs(self.game.player.dashing) >= DASH_MIN_ACTIVE_ABS:
             if self.rect().colliderect(self.game.player.rect()):
+                if self.weapon_kind == "sword" and self.sword_swing_active:
+                    spawn_sword_sparks(self.game, self.rect().center)
+                    self.sword_swing_hit = True
+                    return False
                 self.game.screenshake = max(16, self.game.screenshake)
                 if self.services:
                     self.services.play("hit")
@@ -322,18 +382,42 @@ class Enemy(PhysicsEntity):
             )
 
         if self.flip:
-            surf.blit(
-                pygame.transform.flip(self.game.assets["gun"], True, False),
-                (
-                    self.rect().centerx - 4 - self.game.assets["gun"].get_width() - offset[0],
-                    self.rect().centery - offset[1],
-                ),
-            )
+            if self.weapon_kind == "sword" and "sword" in self.game.assets:
+                sword = pygame.transform.flip(self.game.assets["sword"], True, False)
+                if self.sword_swing_active:
+                    sword = pygame.transform.rotate(sword, 28)
+                surf.blit(
+                    sword,
+                    (
+                        self.rect().centerx - 4 - sword.get_width() - offset[0],
+                        self.rect().centery - sword.get_height() // 2 - offset[1],
+                    ),
+                )
+            else:
+                surf.blit(
+                    pygame.transform.flip(self.game.assets["gun"], True, False),
+                    (
+                        self.rect().centerx - 4 - self.game.assets["gun"].get_width() - offset[0],
+                        self.rect().centery - offset[1],
+                    ),
+                )
         else:
-            surf.blit(
-                self.game.assets["gun"],
-                (self.rect().centerx + 4 - offset[0], self.rect().centery - offset[1]),
-            )
+            if self.weapon_kind == "sword" and "sword" in self.game.assets:
+                sword = self.game.assets["sword"]
+                if self.sword_swing_active:
+                    sword = pygame.transform.rotate(sword, -28)
+                surf.blit(
+                    sword,
+                    (
+                        self.rect().centerx + 4 - offset[0],
+                        self.rect().centery - sword.get_height() // 2 - offset[1],
+                    ),
+                )
+            else:
+                surf.blit(
+                    self.game.assets["gun"],
+                    (self.rect().centerx + 4 - offset[0], self.rect().centery - offset[1]),
+                )
 
 
 class Player(PhysicsEntity):

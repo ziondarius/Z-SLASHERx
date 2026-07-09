@@ -13,6 +13,15 @@ from scripts.constants import (
     ENEMY_ALERT_SHOOT_COOLDOWN,
     ENEMY_ALERT_SPEED_MULT,
     ENEMY_ALERT_VERTICAL_TOLERANCE,
+    SWORDSMAN_ATTACK_RANGE,
+    SWORDSMAN_CHASE_SPEED,
+    SWORDSMAN_LOS_VERTICAL_TOLERANCE,
+    SWORDSMAN_JUMP_HEIGHT_LIMIT,
+    SWORDSMAN_JUMP_VELOCITY,
+    SWORDSMAN_JUMP_COOLDOWN_MS,
+    SWORDSMAN_LOST_MS,
+    SWORDSMAN_SWING_COOLDOWN,
+    SWORDSMAN_SWING_DURATION,
 )
 from scripts.rng_service import RNGService
 from scripts.settings import settings
@@ -51,7 +60,7 @@ class ScriptedEnemyPolicy(Policy):
         else:
             entity.flip = not entity.flip
 
-    def _has_line_of_sight(self, entity, game) -> bool:
+    def _has_line_of_sight(self, entity, game, vertical_tolerance: float = ENEMY_ALERT_VERTICAL_TOLERANCE) -> bool:
         player = game.player
         tilemap = game.tilemap
         ex = float(entity.rect().centerx)
@@ -59,7 +68,7 @@ class ScriptedEnemyPolicy(Policy):
         px = float(player.rect().centerx)
         py = float(player.rect().centery)
 
-        if abs(py - ey) > ENEMY_ALERT_VERTICAL_TOLERANCE:
+        if abs(py - ey) > vertical_tolerance:
             return False
 
         step = 4 if px >= ex else -4
@@ -88,7 +97,7 @@ class ScriptedEnemyPolicy(Policy):
         state = getattr(entity, "enemy_alert_state", "idle")
 
         facing_player = (entity.flip and player_dx < 0) or (not entity.flip and player_dx > 0)
-        los = self._has_line_of_sight(entity, game)
+        los = self._has_line_of_sight(entity, game, vertical_tolerance=SWORDSMAN_LOS_VERTICAL_TOLERANCE)
 
         if not alert_active:
             if facing_player and los:
@@ -184,6 +193,115 @@ class ScriptedEnemyPolicy(Policy):
                 result["shoot"] = True
                 result["shoot_direction"] = 1
                 setattr(entity, "shoot_cooldown_enemy", ENEMY_ALERT_SHOOT_COOLDOWN)
+
+
+class SwordsmanPolicy(ScriptedEnemyPolicy):
+    """Chases the player with a sword, swings on a cooldown, and can jump higher."""
+
+    def _swordsman_obstacle_ahead(self, entity, tilemap, direction: int) -> bool:
+        r = entity.rect()
+        probe_x = r.centerx + direction * (r.width // 2 + 3)
+        probes = (
+            (probe_x, r.bottom + 2),
+            (probe_x, r.centery),
+            (probe_x, r.top + 1),
+        )
+        return any(tilemap.solid_check(p) for p in probes)
+
+    def _swordsman_jump_velocity(self, entity, player_dy: float, blocked: bool) -> float:
+        player = getattr(entity.game, "player", None)
+        player_jump = getattr(player, "jump_power", SWORDSMAN_JUMP_VELOCITY)
+        return player_jump
+
+    def decide(self, entity: Any, context: Any) -> Dict[str, Any]:
+        game = entity.game
+        result = {
+            "movement": (0, 0),
+            "shoot": False,
+            "shoot_direction": 0,
+            "jump": False,
+            "jump_velocity": SWORDSMAN_JUMP_VELOCITY,
+            "swing": False,
+        }
+        tilemap = game.tilemap
+        now = pygame.time.get_ticks()
+        player = game.player
+        player_dx = float(player.rect().centerx - entity.rect().centerx)
+        player_dy = float(player.rect().centery - entity.rect().centery)
+        facing_player = (entity.flip and player_dx < 0) or (not entity.flip and player_dx > 0)
+        los = self._has_line_of_sight(entity, game, vertical_tolerance=SWORDSMAN_JUMP_HEIGHT_LIMIT)
+
+        alert_active = bool(getattr(entity, "swordsman_alert_active", False))
+        lost_since = int(getattr(entity, "swordsman_alert_lost_since", 0))
+        last_jump_at = int(getattr(entity, "swordsman_last_jump_at", 0))
+
+        if not alert_active:
+            if facing_player and los:
+                alert_active = True
+                setattr(entity, "swordsman_alert_active", True)
+                setattr(entity, "swordsman_alert_lost_since", 0)
+                setattr(entity, "enemy_alert_icon", "exclamation_mark")
+            else:
+                self._patrol(entity, tilemap, result)
+                return result
+        # If the player leaves sight, freeze for 2 seconds and then resume patrol.
+        if not los:
+            if not lost_since:
+                lost_since = now
+            setattr(entity, "swordsman_alert_lost_since", lost_since)
+            setattr(entity, "enemy_alert_icon", "question_mark")
+            result["movement"] = (0, 0)
+            result["shoot"] = False
+            if now - lost_since >= SWORDSMAN_LOST_MS:
+                setattr(entity, "swordsman_alert_active", False)
+                setattr(entity, "swordsman_alert_lost_since", 0)
+                setattr(entity, "enemy_alert_icon", None)
+                self._patrol(entity, tilemap, result)
+                return result
+            return result
+
+        setattr(entity, "swordsman_alert_lost_since", 0)
+        setattr(entity, "enemy_alert_icon", "exclamation_mark")
+
+        if player_dx > 0:
+            entity.flip = False
+        elif player_dx < 0:
+            entity.flip = True
+
+        if getattr(entity, "sword_swing_active", False):
+            result["movement"] = (0, 0)
+            return result
+
+        distance = abs(player_dx)
+        move_dir = 1 if player_dx > 0 else -1
+        blocked = self._swordsman_obstacle_ahead(entity, tilemap, move_dir)
+        player_above = player_dy < -8
+        jump_ready = (now - last_jump_at) >= SWORDSMAN_JUMP_COOLDOWN_MS
+
+        move_x = 0.0
+        if distance > 12:
+            move_x = SWORDSMAN_CHASE_SPEED * move_dir
+
+        if (blocked or player_above) and jump_ready:
+            if entity.collisions.get("down", False):
+                result["jump"] = True
+                result["jump_velocity"] = self._swordsman_jump_velocity(entity, player_dy, blocked)
+                setattr(entity, "swordsman_last_jump_at", now)
+            move_x = SWORDSMAN_CHASE_SPEED * move_dir
+
+        if distance < 8:
+            move_x = 0.0
+
+        result["movement"] = (move_x, 0)
+
+        if distance <= SWORDSMAN_ATTACK_RANGE and abs(player_dy) <= 18 and now >= getattr(entity, "sword_swing_cooldown_until", 0):
+            result["swing"] = True
+            setattr(entity, "sword_swing_active", True)
+            setattr(entity, "sword_swing_until", now + SWORDSMAN_SWING_DURATION)
+            setattr(entity, "sword_swing_cooldown_until", now + SWORDSMAN_SWING_COOLDOWN)
+            setattr(entity, "sword_swing_hit", False)
+
+        return result
 
 
 class PatrolPolicy(Policy):

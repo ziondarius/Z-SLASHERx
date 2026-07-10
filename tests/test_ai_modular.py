@@ -11,6 +11,7 @@ class TestModularAI(unittest.TestCase):
         self.mock_game.tilemap = MagicMock()
         self.mock_game.player = MagicMock()
         self.mock_game.player.pos = [0, 0]
+        self.mock_game.player.enemy_form_active = False
         self.mock_services = MagicMock()
 
     def test_policy_registration(self):
@@ -124,6 +125,31 @@ class TestModularAI(unittest.TestCase):
         self.assertFalse(getattr(entity, "enemy_alert_active", True))
         self.assertEqual(getattr(entity, "enemy_alert_icon", "x"), None)
 
+    def test_scripted_enemy_ignores_red_disguise(self):
+        policy = ScriptedEnemyPolicy()
+        entity = MagicMock()
+        entity.game = self.mock_game
+        entity.flip = False
+        entity.rect.return_value.centerx = 100
+        entity.rect.return_value.centery = 100
+        entity.rect.return_value.width = 16
+        entity.rect.return_value.height = 16
+        entity.rect.return_value.bottom = 116
+        entity.rect.return_value.top = 100
+        entity.collisions = {"left": False, "right": False, "down": True}
+        self.mock_game.player.enemy_form_active = True
+        self.mock_game.player.rect.return_value.centerx = 164
+        self.mock_game.player.rect.return_value.centery = 100
+        self.mock_game.tilemap.solid_check.return_value = True
+
+        with unittest.mock.patch("scripts.ai.behaviors.pygame.time.get_ticks", return_value=1000):
+            decision = policy.decide(entity, self.mock_game)
+
+        self.assertNotEqual(decision["movement"], (0, 0))
+        self.assertFalse(decision["shoot"])
+        self.assertFalse(getattr(entity, "enemy_alert_active", False))
+        self.assertIsNone(getattr(entity, "enemy_alert_icon", None))
+
     def test_swordsman_policy(self):
         policy = SwordsmanPolicy()
         entity = MagicMock()
@@ -164,6 +190,37 @@ class TestModularAI(unittest.TestCase):
             decision = policy.decide(entity, self.mock_game)
 
         self.assertTrue(decision["jump"])
+
+    def test_swordsman_ignores_red_disguise(self):
+        policy = SwordsmanPolicy()
+        entity = MagicMock()
+        entity.game = self.mock_game
+        entity.flip = False
+        entity.rect.return_value.centerx = 100
+        entity.rect.return_value.centery = 100
+        entity.rect.return_value.width = 16
+        entity.rect.return_value.bottom = 116
+        entity.collisions = {"left": False, "right": False, "down": True}
+        entity.swordsman_alert_active = True
+        entity.swordsman_alert_lost_since = 100
+        entity.enemy_alert_icon = "exclamation_mark"
+        entity.sword_swing_active = True
+        entity.sword_swing_until = 9999
+        entity.sword_swing_cooldown_until = 9999
+        entity.sword_swing_hit = True
+        self.mock_game.player.enemy_form_active = True
+        self.mock_game.player.rect.return_value.centerx = 160
+        self.mock_game.player.rect.return_value.centery = 100
+        self.mock_game.tilemap.solid_check.return_value = True
+
+        with unittest.mock.patch("scripts.ai.behaviors.pygame.time.get_ticks", return_value=1000):
+            decision = policy.decide(entity, self.mock_game)
+
+        self.assertNotEqual(decision["movement"], (0, 0))
+        self.assertFalse(decision["shoot"])
+        self.assertFalse(getattr(entity, "swordsman_alert_active", True))
+        self.assertIsNone(getattr(entity, "enemy_alert_icon", None))
+        self.assertFalse(getattr(entity, "sword_swing_active", True))
 
     def test_chaser_policy(self):
         from scripts.ai.behaviors import ChaserPolicy

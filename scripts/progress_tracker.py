@@ -40,10 +40,11 @@ class ProgressTracker:
             self.levels = list_levels()
         # Ensure deterministic ordering
         self.levels.sort()
-        # Start locked by default: only the first level is available until
-        # the player clears it and unlocks the next one.
-        self.unlocked = {0}
-        # Preserve explicit dev override for debugging.
+        # Current build unlocks every discovered level by default so the
+        # full campaign is immediately available from the level select.
+        self.unlocked = set(self.levels)
+        # Preserve explicit dev override for debugging, but it no longer
+        # needs to do anything special because all levels are already open.
         if os.environ.get("DEV_UNLOCK_LEVELS") == "1" and "PYTEST_CURRENT_TEST" not in os.environ:
             self.unlocked.update(self.levels)
         # Normalize settings map to discovered levels only

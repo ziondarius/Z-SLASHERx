@@ -35,6 +35,15 @@ class ScriptedEnemyPolicy(Policy):
         result = {"movement": (0, 0), "shoot": False, "shoot_direction": 0}
         tilemap = game.tilemap
 
+        if getattr(game.player, "enemy_form_active", False):
+            self._patrol(entity, tilemap, result)
+            setattr(entity, "enemy_alert_active", False)
+            setattr(entity, "enemy_alert_state", "idle")
+            setattr(entity, "enemy_alert_lost_since", 0)
+            setattr(entity, "enemy_alert_icon", None)
+            setattr(entity, "shoot_cooldown_enemy", 0)
+            return result
+
         if self._update_alert_state(entity, game, result):
             return result
 
@@ -226,6 +235,16 @@ class SwordsmanPolicy(ScriptedEnemyPolicy):
         tilemap = game.tilemap
         now = pygame.time.get_ticks()
         player = game.player
+        if getattr(player, "enemy_form_active", False):
+            self._patrol(entity, tilemap, result)
+            setattr(entity, "swordsman_alert_active", False)
+            setattr(entity, "swordsman_alert_lost_since", 0)
+            setattr(entity, "enemy_alert_icon", None)
+            setattr(entity, "sword_swing_active", False)
+            setattr(entity, "sword_swing_until", 0)
+            setattr(entity, "sword_swing_cooldown_until", 0)
+            setattr(entity, "sword_swing_hit", False)
+            return result
         player_dx = float(player.rect().centerx - entity.rect().centerx)
         player_dy = float(player.rect().centery - entity.rect().centery)
         facing_player = (entity.flip and player_dx < 0) or (not entity.flip and player_dx > 0)

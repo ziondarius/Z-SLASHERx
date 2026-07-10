@@ -179,6 +179,7 @@ class Enemy(PhysicsEntity):
         self.sword_swing_until = 0
         self.sword_swing_cooldown_until = 0
         self.sword_swing_hit = False
+        self.swordsman_jump_visual_until = 0
 
     def set_action(self, action):
         if action == self.action:
@@ -252,6 +253,11 @@ class Enemy(PhysicsEntity):
         # Apply jump intent
         if decision.get("jump") and self.collisions["down"]:
             self.velocity[1] = decision.get("jump_velocity", JUMP_VELOCITY)
+            if self.weapon_kind == "sword":
+                self.swordsman_jump_visual_until = max(
+                    getattr(self, "swordsman_jump_visual_until", 0),
+                    now + 220,
+                )
 
         # Apply shooting intent
         if decision.get("shoot") and not getattr(self.game.player, "enemy_form_active", False):
@@ -296,6 +302,22 @@ class Enemy(PhysicsEntity):
                     self.sword_swing_hit = True
                     spawn_sword_sparks(self.game, self.rect().center)
 
+        desired_action = None
+        if self.weapon_kind == "sword":
+            if now < getattr(self, "swordsman_jump_visual_until", 0):
+                desired_action = "jump"
+            elif combined_movement[0] != 0:
+                desired_action = "run"
+            else:
+                desired_action = "idle"
+        elif combined_movement[0] != 0:
+            desired_action = "run"
+        else:
+            desired_action = "idle"
+
+        if desired_action is not None:
+            self.set_action(desired_action)
+
         # Boss-only special ability: tri-shot volley every cooldown cycle.
         if self.is_boss:
             self.boss_cooldown -= 1
@@ -314,18 +336,6 @@ class Enemy(PhysicsEntity):
                 self.boss_cooldown = 75
 
         super().update(tilemap, movement=combined_movement)
-
-        if self.weapon_kind == "sword":
-            if not self.collisions["down"] or decision.get("jump"):
-                self.set_action("jump")
-            elif combined_movement[0] != 0:
-                self.set_action("run")
-            else:
-                self.set_action("idle")
-        elif combined_movement[0] != 0:
-            self.set_action("run")
-        else:
-            self.set_action("idle")
 
         # Dash kill & projectile collision checks
         if abs(self.game.player.dashing) >= DASH_MIN_ACTIVE_ABS:
@@ -439,6 +449,10 @@ class Player(PhysicsEntity):
         """
         self.character = 0
         self.enemy_form_active = False
+        self.enemy_form_until = 0
+        self.enemy_form_cooldown_until = 0
+        self.enemy_form_duration_ms = 15000
+        self.enemy_form_cooldown_ms = 5000
         super().__init__(game, "player", pos, size, id, services=services)
         self.air_time = 0
         self.jumps = 2
@@ -562,26 +576,42 @@ class Player(PhysicsEntity):
     def toggle_enemy_form(self) -> bool:
         if not self._can_use_enemy_form():
             return False
-        self.enemy_form_active = not self.enemy_form_active
+        now = pygame.time.get_ticks()
         if self.enemy_form_active:
-            self._shadow_requested = False
-            self.shadow_form_active = False
-            self.shadow_form_ms = self.shadow_form_max_ms
-            self.dashing = 0
-            self.speed_boost_active = False
-            self.speed_boost_until = 0
-            self.speed_boost_cooldown_until = 0
-            self.slide_ability_active = False
-            self.slide_hold_active = False
-            self.slide_anim_until = 0
-            self.move_speed = self._enemy_move_speed()
-            self.action = ""
-            self.set_action("idle")
-        else:
-            self._apply_skin_stats()
-            self.action = ""
-            self.set_action("idle")
-        return self.enemy_form_active
+            self._end_enemy_form(now)
+            return False
+        if now < self.enemy_form_cooldown_until:
+            return False
+        self.enemy_form_active = True
+        self.enemy_form_until = now + self.enemy_form_duration_ms
+        self.enemy_form_cooldown_until = self.enemy_form_until + self.enemy_form_cooldown_ms
+        self._shadow_requested = False
+        self.shadow_form_active = False
+        self.shadow_form_ms = self.shadow_form_max_ms
+        self.dashing = 0
+        self.speed_boost_active = False
+        self.speed_boost_until = 0
+        self.speed_boost_cooldown_until = 0
+        self.slide_ability_active = False
+        self.slide_hold_active = False
+        self.slide_anim_until = 0
+        self.slide_ability_until = 0
+        self.slide_ability_started_at = 0
+        self.slide_cooldown_until = 0
+        self.move_speed = 2.2
+        self.action = ""
+        self.set_action("idle")
+        return True
+
+    def _end_enemy_form(self, now: int | None = None) -> None:
+        if now is None:
+            now = pygame.time.get_ticks()
+        self.enemy_form_active = False
+        self.enemy_form_until = 0
+        self.enemy_form_cooldown_until = now + self.enemy_form_cooldown_ms
+        self._apply_skin_stats()
+        self.action = ""
+        self.set_action("idle")
 
     # --- New canonical attribute ---
     @property
@@ -776,6 +806,8 @@ class Player(PhysicsEntity):
         if self.enemy_form_active and not self._can_use_enemy_form():
             self.enemy_form_active = False
             self._apply_skin_stats()
+        if self.enemy_form_active and now >= self.enemy_form_until:
+            self._end_enemy_form(now)
         if self.speed_boost_active and now >= self.speed_boost_until:
             self.speed_boost_active = False
             self.speed_boost_until = 0
@@ -861,8 +893,8 @@ class Player(PhysicsEntity):
             self._apply_skin_stats()
 
         if self.enemy_form_active:
-            # Match the enemy patrol pace more closely in disguise.
-            self.move_speed = self._enemy_move_speed() * 1.25
+            # Red disguise moves at the player's normal pace, not enemy pace.
+            self.move_speed = 2.2
             self.slide_ability_active = False
             self.slide_hold_active = False
             self.slide_anim_until = 0

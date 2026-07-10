@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 
-VERSION_NAME = "Character Edition"
-VERSION_MAJOR = 2
+VERSION_NAME = "Character Update"
+VERSION_MAJOR = 3
 VERSION_MINOR = 0
 
 

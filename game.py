@@ -179,6 +179,33 @@ class Game:
         # Boss encounters disabled: keep all enemies in normal mode.
         return
 
+    def _spawn_enemy_from_spawner(self, spawner, enemy_id: int) -> Enemy:
+        if spawner.get("variant") == 2:
+            enemy = Enemy(self, spawner["pos"], (8, 15), enemy_id, policy="swordsman")
+            enemy.sprite_set = "swordsman"
+            enemy.weapon_kind = "sword"
+            enemy.deflect_projectiles = True
+            enemy.sword_swing_active = False
+            enemy.sword_swing_until = 0
+            enemy.sword_swing_cooldown_until = 0
+            enemy.sword_swing_hit = False
+            return enemy
+        return Enemy(self, spawner["pos"], (8, 15), enemy_id)
+
+    def _spawn_level3_tunnel_swordsman(self, enemy_id: int) -> Enemy:
+        # Extra swordsman for the flag tunnel in level 3; keep the original
+        # default enemy on its spawner and add this one as a separate threat.
+        tunnel_pos = [13 * self.tilemap.tile_size, -69 * self.tilemap.tile_size]
+        swordsman = Enemy(self, tunnel_pos, (8, 15), enemy_id, policy="swordsman")
+        swordsman.sprite_set = "swordsman"
+        swordsman.weapon_kind = "sword"
+        swordsman.deflect_projectiles = True
+        swordsman.sword_swing_active = False
+        swordsman.sword_swing_until = 0
+        swordsman.sword_swing_cooldown_until = 0
+        swordsman.sword_swing_hit = False
+        return swordsman
+
     def load_level(self, map_id, lives=SAVE_DEFAULT_LIVES, respawn=False):
         self.timer.reset()
         self.tilemap.load("data/maps/" + str(map_id) + ".json")
@@ -245,10 +272,13 @@ class Game:
                 player.velocity = [0, 0]  # Reset velocity too for safety
                 if hasattr(player, "health_max"):
                     player.health = player.health_max
-            for spawner in self.tilemap.extract([("spawners", 0), ("spawners", 1)]):
-                if spawner["variant"] == 1:
-                    self.enemies.append(Enemy(self, spawner["pos"], (8, 15), enemy_id))
+            for spawner in self.tilemap.extract([("spawners", 0), ("spawners", 1), ("spawners", 2)]):
+                if spawner["variant"] != 0:
+                    self.enemies.append(self._spawn_enemy_from_spawner(spawner, enemy_id))
                     enemy_id += 1
+            if map_id == 3:
+                self.enemies.append(self._spawn_level3_tunnel_swordsman(enemy_id))
+                enemy_id += 1
         else:
             # Capture RNG state at start of level
             self.level_rng_state = rng.get_state()
@@ -256,7 +286,7 @@ class Game:
             enemy_id = 0
             player_id = 0
             character = self.playerCharacter
-            for spawner in self.tilemap.extract([("spawners", 0), ("spawners", 1)]):
+            for spawner in self.tilemap.extract([("spawners", 0), ("spawners", 1), ("spawners", 2)]):
                 if spawner["variant"] == 0:
                     player = Player(
                         self,
@@ -273,29 +303,18 @@ class Game:
                     self.players.append(player)
                     player_id += 1
                 else:
-                    self.enemies.append(Enemy(self, spawner["pos"], (8, 15), enemy_id))
+                    self.enemies.append(self._spawn_enemy_from_spawner(spawner, enemy_id))
                     enemy_id += 1
+
+            if map_id == 3:
+                self.enemies.append(self._spawn_level3_tunnel_swordsman(enemy_id))
+                enemy_id += 1
 
             self.saves = 1
 
             # Set the current player if there are any players
             if self.players:
                 self.player = self.players[self.playerID]
-                if map_id == 0:
-                    try:
-                        swordsman_pos = [self.player.respawn_pos[0] + 48, self.player.respawn_pos[1]]
-                        swordsman = Enemy(self, swordsman_pos, (8, 15), enemy_id, policy="swordsman")
-                        swordsman.sprite_set = "swordsman"
-                        swordsman.weapon_kind = "sword"
-                        swordsman.deflect_projectiles = True
-                        swordsman.sword_swing_active = False
-                        swordsman.sword_swing_until = 0
-                        swordsman.sword_swing_cooldown_until = 0
-                        swordsman.sword_swing_hit = False
-                        self.enemies.append(swordsman)
-                        enemy_id += 1
-                    except Exception:
-                        pass
             # Moving damage boxes removed.
         self._apply_boss_for_level()
         # END LOAD LEVEL

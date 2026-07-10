@@ -326,7 +326,16 @@ class Renderer:
             return
 
         if character_path == "red":
-            UI.render_game_ui_element(game.display_2, "Ability Length: Infinite", 5, y)
+            length_ms = 15000
+            active = bool(getattr(player, "enemy_form_active", False))
+            active_until = int(getattr(player, "enemy_form_until", 0))
+            recharge_until = int(getattr(player, "enemy_form_cooldown_until", 0))
+            if active and now < active_until:
+                UI.render_game_ui_element(game.display_2, f"Ability Time Remaining: {max(0, active_until - now) / 1000:.1f}s", 5, y)
+            elif now < recharge_until:
+                UI.render_game_ui_element(game.display_2, f"Recharge Time Remaining: {max(0, recharge_until - now) / 1000:.1f}s", 5, y)
+            else:
+                UI.render_game_ui_element(game.display_2, f"Ability Length: {length_ms / 1000:.1f}s", 5, y)
             return
 
         if character_path == "archer":

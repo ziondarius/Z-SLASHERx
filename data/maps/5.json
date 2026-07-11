@@ -6391,7 +6391,7 @@
             },
             "-12;-58": {
                 "type": "spawners",
-                "variant": 1,
+                "variant": 2,
                 "pos": [
                     -12,
                     -58
@@ -6415,7 +6415,7 @@
             },
             "-16;-58": {
                 "type": "spawners",
-                "variant": 1,
+                "variant": 2,
                 "pos": [
                     -16,
                     -58

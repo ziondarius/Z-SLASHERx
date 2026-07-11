@@ -12431,7 +12431,7 @@
             },
             "-18;-60": {
                 "type": "spawners",
-                "variant": 1,
+                "variant": 2,
                 "pos": [
                     -18,
                     -60
@@ -12455,7 +12455,7 @@
             },
             "-35;-69": {
                 "type": "spawners",
-                "variant": 1,
+                "variant": 2,
                 "pos": [
                     -35,
                     -69
@@ -12463,7 +12463,7 @@
             },
             "-40;-65": {
                 "type": "spawners",
-                "variant": 1,
+                "variant": 2,
                 "pos": [
                     -40,
                     -65
@@ -12471,7 +12471,7 @@
             },
             "-35;-61": {
                 "type": "spawners",
-                "variant": 1,
+                "variant": 2,
                 "pos": [
                     -35,
                     -61
